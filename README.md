@@ -1,6 +1,6 @@
 # CS 454/554 Midterm Mini-Project — One Service, Two Deployment Environments
 
-> **Work in progress.** Parts 1 and 2 are complete; Parts 3–5 and the CS 554 extension are being added. Sections marked `TODO` are not yet done.
+> **Work in progress.** Deployment and experiment evidence for Parts 1–4 and the CS 554 extension are complete; the technical report and walkthrough remain. Sections marked `TODO` are not yet done.
 
 One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux virtual machine, and a local Kubernetes cluster running two replicas. The project records how each environment manages the service, investigates a deliberately broken Service selector, runs a readiness experiment (CS 554), and explains how the same workload would be deployed on OpenStack.
 
@@ -24,6 +24,7 @@ One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux
 - VM: Ubuntu Server 24.04.5 LTS, `cs554-vm`, 2 vCPUs, 4096 MiB RAM, 25 GiB virtual disk (root filesystem approximately 24 GiB), stored at `C:\VMs\cs554-vm`.
 - Network: VMware NAT (VMnet8), `192.168.197.0/24`; host adapter `192.168.197.1`, guest `192.168.197.134` at verification time. DHCP may change the guest address; host access is direct without port forwarding.
 - Docker Engine 29.1.3 and Docker Compose 2.40.3 run inside the VM; not on the Windows host for this project.
+- Application image: `cs554-midterm:1.1` runs in both Compose and Kubernetes. Version `1.0` in earlier captures records the pre-readiness-toggle experiments; those captures remain unchanged.
 - Kubernetes: k3d 5.9.0 runs the single-node `cs554` cluster as Docker containers inside this VM. The server image is pinned to `rancher/k3s:v1.37.1-k3s1`, matching kubectl 1.37.1; do not use k3d's older default image. The application image is imported with `k3d image import`.
 - Tools used: Windows PowerShell 5.1, Windows OpenSSH client, VMware `ovftool`, `vmware-vdiskmanager` and `vmrun`; guest cloud-init, OpenSSH, APT, OpenSSL, Docker, Compose, kubectl and k3d.
 
@@ -61,28 +62,30 @@ The import phase refuses to overwrite an existing VM. Do not rerun creation/conf
 
 ## Part 1 — Build the image
 
-The service in `app/` is the course starter (`cs454-midterm-starter`, copied from the course exercises repository at commit `8c572c1`), unchanged. It is dependency-free and needs Node.js 22 or newer.
+The service in `app/` is the course starter (`cs454-midterm-starter`, copied from the course exercises repository at commit `8c572c1`), with only an additive `/health` readiness-file toggle for the CS 554 experiment. It is dependency-free and needs Node.js 22 or newer; the Dockerfile remains unchanged.
 
 ```bash
 cd app && npm test          # unit test: configuration, counter, health, fresh instance
-docker build -t cs554-midterm:1.0 app
+docker build -t cs554-midterm:1.1 app
 ```
 
 - Configuration is read from environment variables at run time: `PORT` (default `8080`), `SERVICE_NAME` (default `cs454-midterm`), `MESSAGE` (default `Hello from the mini-project!`). The image bakes none of them in; Compose and Kubernetes supply them.
-- `GET /` returns `{service, message, hostname, requestCount}`; `GET /health` returns `{"status":"ok"}` with HTTP 200; anything else is 404.
+- `GET /` returns `{service, message, hostname, requestCount}`; `GET /health` normally returns `{"status":"ok"}` with HTTP 200; anything else is 404. With `READINESS_FILE` set, the missing-file case instead returns HTTP 503 and `{"status":"not-ready"}`.
 - The counter counts successful `GET /` requests only (health checks do not touch it), lives in the process's memory, and starts at zero for every new process. A restarted container or a replacement Pod therefore begins again at 1.
 - Every request is logged to standard output as one JSON line (`{"method","path","status"}`), and startup logs `Listening on port <PORT>`, so `docker compose logs` and `kubectl logs` show both.
 - The image runs as the unprivileged `node` user, starts Node as PID 1 (exec-form `CMD`), and the service handles `SIGTERM` with a graceful shutdown.
+
+`READINESS_FILE` is optional and checked only by the existing `/health` handler. When unset, behavior is unchanged, including in Compose. Kubernetes sets it to `/tmp/ready`; its container-local file exists after the `postStart` hook runs. Removing the file in one Pod changes only that Pod's health response, not `GET /`, the counter, logging, shutdown, or its running process. Recreating it restores readiness. One added test verifies the 503/200 toggle and uninterrupted counter; existing tests are unchanged.
 
 ## Part 2 — Docker Compose inside the VM
 
 ### Start, status, and logs
 
-Run inside the VM, from the public checkout at `/home/student/CS-554-MidTerm`. The image is built from the unchanged `app/Dockerfile`; Kubernetes will reuse `cs554-midterm:1.0`.
+Run inside the VM, from the public checkout at `/home/student/CS-554-MidTerm`. The image is built from the unchanged `app/Dockerfile`; Kubernetes uses the same `cs554-midterm:1.1`. The earlier Part 2 capture used `1.0`; `evidence/04-readiness-554.md` records the upgrade and successful Compose requests with `READINESS_FILE` unset.
 
 ```bash
 cd /home/student/CS-554-MidTerm
-docker build -t cs554-midterm:1.0 app
+docker build -t cs554-midterm:1.1 app
 docker image ls cs554-midterm
 cd compose
 cp .env.example .env
@@ -161,11 +164,11 @@ k3d cluster create cs554 --image rancher/k3s:v1.37.1-k3s1 --servers 1 --agents 0
 kubectl cluster-info
 kubectl get nodes -o wide
 kubectl version
-k3d image import cs554-midterm:1.0 -c cs554
+k3d image import cs554-midterm:1.1 -c cs554
 docker exec k3d-cs554-server-0 crictl images | grep cs554-midterm
 ```
 
-The probe must pass before downloads. Both client and server were 1.37.1. Import uses the existing Part 2 image, not a new build or application registry; `crictl images` confirmed it on the node. The Deployment uses `imagePullPolicy: Never`, so a missing import cannot silently fall back to a registry pull. The kubeconfig generated by k3d stays outside the repository in the VM; never commit it. Run cluster creation only if `k3d cluster list` shows no existing `cs554` cluster.
+The probe must pass before downloads. Both client and server were 1.37.1. Import uses the same image as Compose, without an application registry; `crictl images` confirmed it on the node. Part 3's original `1.0` captures are historical; the readiness experiment built and imported `1.1` into the same cluster. The Deployment uses `imagePullPolicy: Never`, so a missing import cannot silently fall back to a registry pull. The kubeconfig generated by k3d stays outside the repository in the VM; never commit it. Run cluster creation only if `k3d cluster list` shows no existing `cs554` cluster.
 
 ### Deploy
 
@@ -308,7 +311,70 @@ Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554
 
 See `k8s/deployment.yaml`, `evidence/04-readiness-554.md`, and section 6 of `docs/report.md`.
 
-The deployed settings are in `k8s/deployment.yaml`: CPU/memory requests of `50m`/`64Mi` and limits of `250m`/`128Mi`, yielding Burstable QoS because requests differ from limits. Requests reserve scheduling capacity; CPU limits constrain CPU time and exceeding the memory limit can cause an OOM kill. Readiness checks `/health` on named port `http`, with initial delay 2 seconds, period 5 seconds, failure threshold 2, and success threshold 1 (default timeout 1 second). Readiness governs Service traffic eligibility, not process restart; there is deliberately no liveness probe. The readiness-failure experiment is a later task.
+The deployed settings are in `k8s/deployment.yaml`: CPU/memory requests of `50m`/`64Mi` and limits of `250m`/`128Mi`, yielding Burstable QoS because requests differ from limits. Requests reserve scheduling capacity; CPU limits constrain CPU time and exceeding the memory limit can cause an OOM kill. Readiness checks `/health` on named port `http`, with initial delay 2 seconds, period 5 seconds, failure threshold 2, and success threshold 1 (default timeout 1 second). Readiness governs Service traffic eligibility, not process restart; there is deliberately no liveness probe.
+
+### Preparation and baseline
+
+A running Pod's readiness probe is immutable, so changing it by a per-Pod patch is not supported here. Instead, the application-level file toggle implements the permitted alternative. The Deployment's image, `READINESS_FILE=/tmp/ready`, and `postStart` command `touch /tmp/ready` were rolled out normally before baseline capture. No Deployment/template changes occurred during the experiment itself.
+
+```bash
+docker build -t cs554-midterm:1.1 app
+cd compose
+docker compose up -d
+docker compose up -d --wait --wait-timeout 90
+docker compose ps
+curl -sS --max-time 5 http://localhost:8080/
+curl -i --max-time 5 http://localhost:8080/health
+cd ..
+k3d image import cs554-midterm:1.1 -c cs554
+docker exec k3d-cs554-server-0 crictl images | grep cs554-midterm
+kubectl apply -f k8s/deployment.yaml
+kubectl rollout status deploy/cs554-midterm --timeout=120s
+kubectl get pods -l app=cs554-midterm -o wide
+kubectl get deploy cs554-midterm -o yaml
+kubectl get deploy cs554-midterm -o jsonpath='{.metadata.generation}'
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o yaml
+kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do curl -sS --max-time 5 http://cs554-midterm/; echo; done'
+```
+
+Both new Pods were Ready, both EndpointSlice entries had `ready: true`, and requests reached both hostnames. Choose one current Pod name as `<pod-A>`; the recorded A was `cs554-midterm-67c66d7b5d-98k98`, B was `cs554-midterm-67c66d7b5d-l2ffr`. Check A's initial file and counter:
+
+```bash
+kubectl exec <pod-A> -- ls -l /tmp/ready
+kubectl exec <pod-A> -- wget -qO- http://127.0.0.1:8080/
+```
+
+### One running replica becomes NotReady
+
+```bash
+kubectl exec <pod-A> -- rm /tmp/ready
+for i in 1 2 3 4 5 6 7; do
+    date --iso-8601=seconds
+    kubectl get pods -l app=cs554-midterm
+    sleep 3
+done
+kubectl describe pod <pod-A>
+kubectl exec <pod-A> -- wget -qO- http://127.0.0.1:8080/
+kubectl exec <pod-A> -- wget -qO- http://127.0.0.1:8080/health || echo "health exit=$?"
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o yaml
+kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do curl -sS --max-time 5 http://cs554-midterm/; echo; done'
+```
+
+A became `0/1 Running` with zero restarts within two probe periods. Its probe failed with HTTP 503, but a direct root request still succeeded with count 5, continuing from 4. A remained listed in the EndpointSlice with `ready: false` and `serving: false`; B stayed `ready: true`. All ten Service-DNS requests reached B. This tests ready-backend eligibility through ClusterIP routing; port-forward is not used because it pins to one Pod.
+
+### Restore and prove process continuity
+
+```bash
+kubectl exec <pod-A> -- touch /tmp/ready
+kubectl wait --for=condition=Ready pod/<pod-A> --timeout=30s
+kubectl get pods -l app=cs554-midterm
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o yaml
+kubectl exec <pod-A> -- wget -qO- http://127.0.0.1:8080/
+kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do curl -sS --max-time 5 http://cs554-midterm/; echo; done'
+kubectl get deploy cs554-midterm -o jsonpath='{.metadata.generation}'
+```
+
+A recovered within one probe period, both endpoints became ready, and Service requests again reached both hostnames. A's next direct request counted 6: readiness had not restarted the process or reset its state. Pod names, UIDs, container IDs, start times, and zero restarts matched the baseline; Deployment generation stayed 2 and its template was identical throughout. Every temporary change was restored by recreating the file. Both environments remain running on image `1.1`; complete captures and the unchanged probe/resource excerpt are in `evidence/04-readiness-554.md`.
 
 ## Report and evidence
 

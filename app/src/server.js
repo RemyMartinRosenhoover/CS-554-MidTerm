@@ -13,7 +13,11 @@ function createServer(options = {}) {
       requestCount += 1;
       body = { service: serviceName, message, hostname: os.hostname(), requestCount };
     } else if (req.method === 'GET' && path === '/health') {
-      body = { status: 'ok' };
+      if (process.env.READINESS_FILE && !require('node:fs').existsSync(process.env.READINESS_FILE)) {
+        status = 503; body = { status: 'not-ready' };
+      } else {
+        body = { status: 'ok' };
+      }
     } else {
       status = 404;
       body = { error: 'Not Found' };
