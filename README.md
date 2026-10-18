@@ -33,7 +33,7 @@ Host: Windows 11, Windows PowerShell 5.1, Windows OpenSSH client (`ssh`, `scp`, 
 
 Guest: the Ubuntu noble server cloud OVA, verified against its published SHA256SUMS. Cloud-init installs `docker.io`, `docker-compose-v2`, `curl`, `ca-certificates`, `jq`, `git`, and `openssl`; provisioning installs `gnupg`, kubectl from the course's Kubernetes v1.37 APT repository, and k3d from its upstream installer. Actual versions are recorded above and in `evidence/00-host-vm.md`. Guest `student` authenticates with the project SSH key and has passwordless sudo. No password is configured.
 
-From the repository root, use these separate PowerShell phases. Keys, downloads, generated cloud-init, known-hosts and logs stay outside the repository under `$env:USERPROFILE\codex-work`; never commit them.
+From the repository root, use these separate PowerShell phases. Keys, downloads, generated cloud-init, known-hosts and logs stay in a working folder outside the repository (the scripts default to `$env:USERPROFILE\codex-work`); never commit them.
 
 ```powershell
 $work = Join-Path $env:USERPROFILE 'codex-work'
@@ -77,19 +77,77 @@ docker build -t cs554-midterm:1.0 app
 ## Part 2 — Docker Compose inside the VM
 
 ### Start, status, and logs
-TODO
+
+Run inside the VM, from the public checkout at `/home/student/CS-554-MidTerm`. The image is built from the unchanged `app/Dockerfile`; Kubernetes will reuse `cs554-midterm:1.0`.
+
+```bash
+cd /home/student/CS-554-MidTerm
+docker build -t cs554-midterm:1.0 app
+docker image ls cs554-midterm
+cd compose
+cp .env.example .env
+docker compose config
+docker compose up -d
+docker compose up -d --wait --wait-timeout 90
+docker compose ps
+docker compose logs
+```
+
+The committed `.env.example` supplies `PORT=8080`, `HOST_PORT=8080`, `SERVICE_NAME=cs554-compose`, and `MESSAGE=Hello from Compose inside the VM`. The generated `.env` is ignored and must not be committed. Compose publishes VM port 8080 to container port 8080, uses `restart: unless-stopped`, and checks `/health` every 10 seconds with a 3-second timeout and 3 retries. A failed health check marks the container unhealthy; it does not itself restart the process. The observed service was healthy.
 
 ### Access from inside the VM
-TODO
+
+```bash
+curl -s http://localhost:8080/
+curl -s http://localhost:8080/
+curl -s http://localhost:8080/
+curl -i http://localhost:8080/health
+```
+
+The first three responses reported counts 1, 2, and 3 with service `cs554-compose`; `/health` returned HTTP 200 without changing the counter. JSON responses have no trailing newline, so consecutive responses run together in the raw capture.
 
 ### Access from the host (networking mode and port forwarding)
-TODO — VM networking mode, addresses, and any port forwarding, exactly as used.
+
+VMware NAT on VMnet8: the Windows host reaches the guest directly at `192.168.197.134`, without port forwarding. Docker's published port connects VM port 8080 to the application in the container. The guest address is DHCP-assigned; confirm it before reusing these commands.
+
+```powershell
+curl.exe -s http://192.168.197.134:8080/
+curl.exe -i http://192.168.197.134:8080/health
+```
+
+The host request reported count 4 from the same container, and the health request returned HTTP 200.
 
 ### Restart and the request counter
-TODO
+
+From the VM checkout's `compose/` directory:
+
+```bash
+curl -s http://localhost:8080/
+docker compose restart
+docker compose up -d --wait --wait-timeout 90
+docker compose ps
+curl -s http://localhost:8080/
+docker compose logs --since 2m
+```
+
+The count was 5 before restart and 1 afterward. The container hostname stayed the same, but its application process restarted and lost its in-memory count. Logs show `Received SIGTERM; stopping.` followed by a new `Listening on port 8080` line. Automatic and manual `/health` requests appear in the logs but do not increment the counter.
 
 ### Cleanup
-TODO
+
+```bash
+docker compose down
+docker compose ps
+```
+
+This removed the service container and Compose network; `ps` showed no service. The local image and ignored `.env` remain. For the walkthrough, the service was subsequently brought back up and left healthy:
+
+```bash
+docker compose up -d
+docker compose up -d --wait --wait-timeout 90
+docker compose ps
+```
+
+The complete build, configuration, requests, logs, restart, cleanup, and final status captures are in `evidence/01-compose.md`.
 
 ## Part 3 — Kubernetes
 
@@ -127,6 +185,6 @@ See `k8s/deployment.yaml`, `evidence/04-readiness-554.md`, and section 6 of `doc
 
 No interactive Ubuntu installation was needed; cloud-init used `DataSourceVMware [seed=guestinfo]` and completed successfully. The first import produced virtual hardware version 99, which Workstation rejected before boot. With the VM powered off, it was corrected to 21; the recipe now supplies `--maxVirtualHardwareVersion=21` to reproduce the correction.
 
-The imported serial device was initially disconnected. It was connected using `vmrun connectNamedDevice ... serial0`; the recipe now sets `serial0.startConnected = "TRUE"`. Serial output goes to `$env:USERPROFILE\codex-work\logs\cs554-vm-serial.log`. Early first-boot messages were recovered from `/var/log/cloud-init-output.log` because the serial log did not capture that period; the private build record notes the gap. For startup troubleshooting, inspect the new VM's `vmware.log`, the serial log and `cloud-init status --long` without changing host settings.
+The imported serial device was initially disconnected. It was connected using `vmrun connectNamedDevice ... serial0`; the recipe now sets `serial0.startConnected = "TRUE"`. Serial output goes to `$env:USERPROFILE\codex-work\logs\cs554-vm-serial.log`. Early first-boot messages were recovered from `/var/log/cloud-init-output.log` because the serial log did not capture that period; those messages are not serial-console evidence. For startup troubleshooting, inspect the new VM's `vmware.log`, the serial log and `cloud-init status --long` without changing host settings.
 
 All seven in-VM TLS endpoints validated with public CA issuers before provisioning; no extra root certificate was needed. Recheck TLS on a different network before downloads. If validation fails, stop for the appropriate approved trust configuration; never disable certificate verification. No guest VM fallback route, host software install, or host configuration change was required.

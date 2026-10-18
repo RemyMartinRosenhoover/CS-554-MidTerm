@@ -1,0 +1,17 @@
+services:
+  web:
+    image: cs554-midterm:1.0
+    build:
+      context: ../app
+    environment:
+      PORT: ${PORT:-8080}
+      SERVICE_NAME: ${SERVICE_NAME:-cs554-compose}
+      MESSAGE: ${MESSAGE:-Hello from Compose inside the VM}
+    ports:
+      - "${HOST_PORT:-8080}:${PORT:-8080}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT:-8080}/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
