@@ -1,0 +1,10 @@
+instance-id: cs554-vm-001
+local-hostname: cs554-vm
+network:
+  version: 2
+  ethernets:
+    primary:
+      match:
+        name: 'en*'
+      dhcp4: true
+      dhcp6: false
