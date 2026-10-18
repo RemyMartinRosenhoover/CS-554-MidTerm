@@ -1,0 +1,41 @@
+# Dependencies and build output
+node_modules/
+npm-debug.log*
+coverage/
+
+# Local configuration and secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+kubeconfig*
+*.kubeconfig
+*.token
+
+# VM and container artifacts (forbidden by the assignment)
+*.tar
+*.tgz
+*.tar.gz
+*.vmdk
+*.vdi
+*.qcow2
+*.ova
+*.ovf
+*.iso
+*.vmx
+*.vmsd
+*.vmxf
+*.nvram
+*.vmem
+*.vmss
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

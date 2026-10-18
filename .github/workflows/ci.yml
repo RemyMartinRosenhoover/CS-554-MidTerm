@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rule 1 from AGENTS.md, enforced: no images, archives, secrets, or dependency
+      # directories may be tracked anywhere in the repository.
+      - name: Forbidden files gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='(^|/)node_modules/|(^|/)\.env(\.[^/]*)?$|\.(tar|tgz|tar\.gz|vmdk|vdi|qcow2|ova|ovf|iso|vmx|nvram|vmem|vmss|pem|key|p12|pfx|token)$|(^|/)id_(rsa|ed25519)|kubeconfig'
+          hits="$(git ls-files | grep -Ei "$pattern" | grep -Ev '(^|/)\.env\.example$' || true)"
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::Forbidden file(s) are tracked in git (images, archives, secrets, or dependencies). Remove them from history."
+            exit 1
+          fi
+          echo "No forbidden files tracked."
+
+      # Steps below run only once their inputs exist, so CI is green from the first commit
+      # and tightens as the project fills in.
+      - name: Detect what exists
+        id: have
+        shell: bash
+        run: |
+          echo "app=$([ -f app/package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "dockerfile=$([ -f app/Dockerfile ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "compose=$([ -f compose/compose.yaml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "k8s=$(ls k8s/*.yaml >/dev/null 2>&1 && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        if: steps.have.outputs.app == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies and run tests
+        if: steps.have.outputs.app == 'true'
+        working-directory: app
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm test
+
+      - name: Build the container image
+        if: steps.have.outputs.dockerfile == 'true'
+        run: docker build -t cs554-midterm:ci app
+
+      - name: Validate the Compose file
+        if: steps.have.outputs.compose == 'true'
+        working-directory: compose
+        shell: bash
+        run: |
+          if [ -f .env.example ]; then
+            docker compose --env-file .env.example config --quiet
+          else
+            docker compose config --quiet
+          fi
+
+      - name: Validate Kubernetes manifests
+        if: steps.have.outputs.k8s == 'true'
+        run: >
+          docker run --rm -v "$PWD/k8s:/k8s:ro" ghcr.io/yannh/kubeconform:latest
+          -strict -summary -ignore-missing-schemas /k8s
