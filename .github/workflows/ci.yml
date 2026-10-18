@@ -43,12 +43,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies and run tests
+      - name: Run the service tests
         if: steps.have.outputs.app == 'true'
         working-directory: app
         shell: bash
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          # The starter is dependency-free; install only if a lockfile ever appears.
+          if [ -f package-lock.json ]; then npm ci; fi
           npm test
 
       - name: Build the container image

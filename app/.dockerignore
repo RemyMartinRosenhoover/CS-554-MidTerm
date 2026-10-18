@@ -1,0 +1,14 @@
+# Only package.json and src/ belong in the image.
+.git
+.gitignore
+.nvmrc
+node_modules
+npm-debug.log*
+*.log
+.env
+.env.*
+test
+README.md
+deployment-planning.md
+Dockerfile
+.dockerignore

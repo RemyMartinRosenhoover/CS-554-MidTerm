@@ -22,9 +22,9 @@ One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux
 ## Environment summary
 
 - Host: Windows 11 workstation running VMware Workstation (TODO: version)
-- VM: TODO (distribution and version, vCPU, RAM, disk, VMware networking mode)
-- Docker Engine and Docker Compose: TODO (versions; both run inside the VM)
-- Kubernetes: TODO (distribution and version; where it runs relative to the host and the VM)
+- VM: Ubuntu Server 24.04 LTS in VMware Workstation, NAT networking (TODO: vCPU, RAM, disk, addresses)
+- Docker Engine and Docker Compose: both run inside the VM (TODO: versions)
+- Kubernetes: k3d (k3s nodes running as Docker containers) inside the same VM, the same distribution used in the course exercises; the image reaches the cluster with `k3d image import` (TODO: versions)
 - Tools used: TODO
 
 ## Prerequisites
@@ -33,7 +33,18 @@ TODO — host-side tools, VM-side packages, and the versions they were tested wi
 
 ## Part 1 — Build the image
 
-TODO — build command, image name and tag, how the counter behaves, where request/startup logs go.
+The service in `app/` is the course starter (`cs454-midterm-starter`, copied from the course exercises repository at commit `8c572c1`), unchanged. It is dependency-free and needs Node.js 22 or newer.
+
+```bash
+cd app && npm test          # unit test: configuration, counter, health, fresh instance
+docker build -t cs554-midterm:1.0 app
+```
+
+- Configuration is read from environment variables at run time: `PORT` (default `8080`), `SERVICE_NAME` (default `cs454-midterm`), `MESSAGE` (default `Hello from the mini-project!`). The image bakes none of them in; Compose and Kubernetes supply them.
+- `GET /` returns `{service, message, hostname, requestCount}`; `GET /health` returns `{"status":"ok"}` with HTTP 200; anything else is 404.
+- The counter counts successful `GET /` requests only (health checks do not touch it), lives in the process's memory, and starts at zero for every new process. A restarted container or a replacement Pod therefore begins again at 1.
+- Every request is logged to standard output as one JSON line (`{"method","path","status"}`), and startup logs `Listening on port <PORT>`, so `docker compose logs` and `kubectl logs` show both.
+- The image runs as the unprivileged `node` user, starts Node as PID 1 (exec-form `CMD`), and the service handles `SIGTERM` with a graceful shutdown.
 
 ## Part 2 — Docker Compose inside the VM
 

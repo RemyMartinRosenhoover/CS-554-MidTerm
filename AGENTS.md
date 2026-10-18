@@ -51,5 +51,7 @@ Screenshots go in `evidence/screenshots/` with descriptive names, for example `0
 Filled in after host verification (issue #1). Until then, assume nothing about the host.
 
 - Host: Windows 11 (Pro or Enterprise), VMware Workstation — version TBD
-- VM: TBD
-- Kubernetes: TBD
+- VM: Ubuntu Server 24.04 LTS, VMware NAT networking; Docker Engine + Compose plugin inside it
+- Kubernetes: k3d inside the same VM (matches the course exercises); image loaded with `k3d image import`
+- Image: `cs554-midterm:1.0`, built from `app/Dockerfile`; configuration via `PORT`, `SERVICE_NAME`, `MESSAGE`
+- Corporate network hazard (from the course's RESTRICTED-NETWORKS appendix): a TLS-intercepting proxy on the work network breaks apt, Docker pulls, and k3d node image pulls with `x509: certificate signed by unknown authority`. Issue #1 checks for it; the VM build issue handles it if present.
