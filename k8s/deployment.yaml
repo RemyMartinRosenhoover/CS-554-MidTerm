@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: cs554-midterm:1.0
+          image: cs554-midterm:1.1
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -27,6 +27,12 @@ spec:
               value: cs554-k8s
             - name: MESSAGE
               value: Hello from Kubernetes inside the VM
+            - name: READINESS_FILE
+              value: /tmp/ready
+          lifecycle:
+            postStart:
+              exec:
+                command: ["sh", "-c", "touch /tmp/ready"]
           resources:
             requests:
               cpu: 50m

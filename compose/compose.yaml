@@ -1,6 +1,6 @@
 services:
   web:
-    image: cs554-midterm:1.0
+    image: cs554-midterm:1.1
     build:
       context: ../app
     environment:
