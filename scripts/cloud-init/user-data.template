@@ -1,0 +1,31 @@
+#cloud-config
+groups:
+  - docker
+users:
+  - name: student
+    groups: [adm, sudo, docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __SSH_PUBKEY__
+ssh_pwauth: false
+disable_root: true
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - curl
+  - ca-certificates
+  - jq
+  - git
+  - openssl
+growpart:
+  mode: auto
+  devices: ['/']
+  ignore_growroot_disabled: false
+resize_rootfs: true
+runcmd:
+  - [systemctl, enable, --now, docker]
+  - [usermod, -aG, docker, student]
+final_message: 'CS554 cloud-init finished after $UPTIME seconds'
