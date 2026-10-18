@@ -84,7 +84,7 @@ switch ($Phase) {
         if (Test-Path -LiteralPath $VmFolder) { throw 'VM folder exists; refusing to overwrite an existing VM.' }
         $parent = Split-Path -Parent $VmFolder
         if (-not (Test-Path -LiteralPath $parent)) { [void](New-Item -ItemType Directory -Path $parent) }
-        $arguments = @('--lax', '--acceptAllEulas', '--name=cs554-vm')
+        $arguments = @('--lax', '--acceptAllEulas', '--maxVirtualHardwareVersion=21', '--name=cs554-vm')
         if ($Route -eq 'OvfProperties') {
             Render-CloudInit
             $arguments += @(('--prop:user-data=' + $script:UserBase64), '--prop:hostname=cs554-vm', '--prop:instance-id=cs554-vm-001')
@@ -107,6 +107,7 @@ switch ($Phase) {
             'ethernet0.connectionType' = 'nat'
             'ethernet0.virtualDev' = 'vmxnet3'
             'serial0.present' = 'TRUE'
+            'serial0.startConnected' = 'TRUE'
             'serial0.fileType' = 'file'
             'serial0.fileName' = $serialLog
             'serial0.tryNoRxLoss' = 'TRUE'

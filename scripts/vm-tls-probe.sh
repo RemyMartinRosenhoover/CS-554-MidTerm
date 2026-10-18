@@ -8,6 +8,14 @@ for host in "${hosts[@]}"; do
     printf '\n$ openssl s_client -connect %s:443 -servername %s -verify_return_error -verify_hostname %s\n' "$host" "$host" "$host"
     status=0
     capture=$(timeout 30 openssl s_client -connect "${host}:443" -servername "$host" -verify_return_error -verify_hostname "$host" </dev/null 2>&1) || status=$?
+    if (( status != 0 )); then
+        printf '%s\n' "$capture" | sed -n '/Verification error:/p; /verify error:/p; /Verify return code:/p'
+        printf 'Validation failed; one diagnostic handshake follows to identify the issuer, not authorize downloads.\n'
+        diagnostic=$(timeout 30 openssl s_client -connect "${host}:443" -servername "$host" -verify_hostname "$host" </dev/null 2>&1) || true
+        if [[ "$diagnostic" == *'-----BEGIN CERTIFICATE-----'* ]]; then
+            capture=$diagnostic
+        fi
+    fi
     if [[ "$capture" != *'-----BEGIN CERTIFICATE-----'* ]]; then
         printf '%s\n' "$capture"
         printf 'RESULT: no certificate; TLS probe blocked (exit %s).\n' "$status"
