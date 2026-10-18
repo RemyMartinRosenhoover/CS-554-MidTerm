@@ -1,6 +1,6 @@
 # CS 454/554 Midterm Mini-Project — One Service, Two Deployment Environments
 
-> **Status: scaffold.** Sections marked `TODO` are completed as each part of the project lands.
+> **Work in progress.** Parts 1 and 2 are complete; Parts 3–5 and the CS 554 extension are being added. Sections marked `TODO` are not yet done.
 
 One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux virtual machine, and a local Kubernetes cluster running two replicas. The project records how each environment manages the service, investigates a deliberately broken Service selector, runs a readiness experiment (CS 554), and explains how the same workload would be deployed on OpenStack.
 
