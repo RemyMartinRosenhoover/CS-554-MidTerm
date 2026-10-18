@@ -17,7 +17,6 @@ One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux
 | `docs/` | Technical report, deployment diagram, references |
 | `evidence/` | Labeled terminal output and screenshots for every required observation |
 | `scripts/` | Small helper scripts (VM setup, image loading) |
-| `agents/` | **Not part of the submission.** Working notes used to coordinate AI coding assistants during the project. Graders can ignore this folder. |
 
 ## Environment summary
 
