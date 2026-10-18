@@ -1,6 +1,6 @@
 # Technical Report — CS 554 Midterm Mini-Project
 
-**Student:** TODO · **Date:** TODO · **Repository:** https://github.com/RemyMartinRosenhoover/CS-544-MidTerm
+**Student:** TODO · **Date:** TODO · **Repository:** https://github.com/RemyMartinRosenhoover/CS-554-MidTerm
 
 > Outline only. Each section is written once its evidence exists. Target length: about two pages for sections 1–4, 500–750 words for section 5, and 200–300 words for section 6. Evidence and references do not count toward length.
 
