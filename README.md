@@ -234,7 +234,75 @@ Only the default `kubernetes` Service remained after application cleanup; the k3
 
 ## Part 4 — Controlled troubleshooting
 
-See `evidence/03-selector-break.md` and section 4 of `docs/report.md`.
+Run this controlled experiment inside the existing VM/cluster from the repository root. It changes only the Service selector; do not edit the Deployment or restart Pods.
+
+### Baseline and selector change
+
+```bash
+kubectl get pods -l app=cs554-midterm --show-labels
+kubectl get svc cs554-midterm -o yaml | sed -n '/^spec:/,$p'
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
+kubectl describe svc cs554-midterm | grep -E 'Selector|Endpoints'
+kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
+```
+
+Verify a fresh `kubectl port-forward svc/cs554-midterm 18080:80` also serves `curl -sS --max-time 5 http://127.0.0.1:18080/`, then stop that forwarder before changing the selector. The baseline had two ready endpoints and both paths succeeded.
+
+```bash
+diff -u k8s/service.yaml k8s/service-broken.yaml
+# diff exit 1 is expected: only the app selector differs.
+date --iso-8601=seconds > /home/student/cs554-issue5-failure-start.txt
+kubectl apply -f k8s/service-broken.yaml
+kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
+```
+
+### Failure and diagnosis
+
+```bash
+for i in 1 2 3; do
+    kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
+    echo "exit=$?"
+done
+kubectl port-forward --pod-running-timeout=5s svc/cs554-midterm 18080:80 > /home/student/cs554-issue5-broken-forward.log 2>&1 &
+forward_pid=$!
+sleep 6
+curl -sS --max-time 5 http://127.0.0.1:18080/
+echo "curl exit=$?"
+wait "$forward_pid"
+echo "port-forward exit=$?"
+cat /home/student/cs554-issue5-broken-forward.log
+```
+
+The fresh forwarder terminated with exit 1 and `error: timed out waiting for the condition`; both client paths failed with curl exit 7. The in-cluster request depends on Service DNS and ClusterIP routing. Port-forward must select a matching Pod anew; an old session would remain pinned and could hide the broken selector. No forwarder remains running after these captures.
+
+```bash
+kubectl get pods -l app=cs554-midterm
+kubectl get pods --show-labels
+kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
+kubectl describe svc cs554-midterm | grep Endpoints
+kubectl get deploy cs554-midterm
+kubectl logs deploy/cs554-midterm --since=2m
+failure_start=$(cat /home/student/cs554-issue5-failure-start.txt)
+kubectl logs -l app=cs554-midterm --since-time="$failure_start" --timestamps --prefix --tail=-1
+```
+
+Pods stayed `1/1 Running`, zero restarts, with `app=cs554-midterm`; the selector was `app=cs554-midterm-typo`. The EndpointSlice remained but its endpoint list was `null`, representing zero endpoints; wide output showed `<unset>`, and this kubectl version printed a blank `Endpoints:` value. Both Pods' exact failure-window logs contained only health checks, with zero `GET /` lines. The Deployment UID, generation, and spec were unchanged.
+
+The mismatch made the EndpointSlice controller select no backends, leaving the Service with its DNS name and ClusterIP but nowhere to route traffic. Pod health alone cannot establish Service reachability: the application can answer its own readiness probe while an unrelated selector excludes it. Diagnose the selector, Pod labels, and EndpointSlices together rather than stopping at healthy Pod status.
+
+### Restore and verify
+
+```bash
+kubectl apply -f k8s/service.yaml
+kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
+kubectl describe svc cs554-midterm | grep -E 'Selector|Endpoints'
+kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
+kubectl get pods -l app=cs554-midterm --show-labels
+```
+
+Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; the technical report will discuss the experiment in section 4 of `docs/report.md`.
 
 ## CS 554 extension — resource settings and readiness
 
