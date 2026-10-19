@@ -134,11 +134,12 @@ The first three responses reported counts 1, 2, and 3 with service `cs554-compos
 
 ### Access from the host (networking mode and port forwarding)
 
-VMware NAT on VMnet8: the Windows host reaches the guest directly at `192.168.197.134`, without port forwarding. Docker's published port connects VM port 8080 to the application in the container. The guest address is DHCP-assigned; confirm it before reusing these commands.
+VMware NAT on VMnet8: the Windows host reaches the guest directly, without port forwarding. Docker's published port connects VM port 8080 to the application in the container. `$ip` is your VM's address, written by the Start phase; the recorded run's guest was `192.168.197.134`.
 
 ```powershell
-curl.exe -s http://192.168.197.134:8080/
-curl.exe -i http://192.168.197.134:8080/health
+$ip = (Get-Content -LiteralPath (Join-Path $env:USERPROFILE 'codex-work\logs\cs554-vm-ip.txt') -Raw).Trim()
+curl.exe -s "http://${ip}:8080/"
+curl.exe -i "http://${ip}:8080/health"
 ```
 
 The host request reported count 4 from the same container, and the health request returned HTTP 200.
@@ -167,7 +168,7 @@ docker compose ps
 
 This removed the service container and Compose network; `ps` showed no service. The local image and ignored `.env` remain. For the walkthrough, the service was subsequently brought back up and left healthy.
 
-**Optional: retain for the walkthrough; skip for final teardown.**
+**Optional: retain for the walkthrough; skip for final teardown.** The CS 554 preparation restarts Compose in any case.
 
 ```bash
 docker compose up -d
@@ -222,6 +223,8 @@ This exercises Service DNS, ClusterIP routing, and selection of ready backends. 
 
 For VM-local access, run the forwarder in one VM terminal and requests in another:
 
+If you background the forwarder instead (`kubectl port-forward svc/cs554-midterm 18080:80 > "$HOME/cs554-forward.log" 2>&1 & forward_pid=$!`), wait until the log shows `Forwarding from 127.0.0.1:18080` before requesting, and stop it with `kill "$forward_pid"`.
+
 ```bash
 kubectl port-forward svc/cs554-midterm 18080:80
 curl -fsS http://127.0.0.1:18080/
@@ -263,7 +266,7 @@ kubectl get all
 
 Only the default `kubernetes` Service remained after application cleanup; the k3d cluster and Compose service were not deleted.
 
-**Optional: retain for the walkthrough; skip for final teardown.** Reapply the three manifests with the deploy commands above. They were subsequently reapplied in the recorded run. The selector and readiness experiments are complete and all temporary changes were restored; the correct Service, two ready replicas, and client Pod remain running.
+**Required to continue to Part 4 or the CS 554 section; skip only when going straight to Full teardown.** Reapply the three manifests with the deploy commands above and wait for readiness. They were subsequently reapplied in the recorded run. The selector and readiness experiments are complete and all temporary changes were restored; the correct Service, two ready replicas, and client Pod remain running.
 
 ## Part 4 — Controlled troubleshooting
 
@@ -280,15 +283,17 @@ kubectl describe svc cs554-midterm | grep -E 'Selector|Endpoints'
 kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
 ```
 
-Verify a fresh `kubectl port-forward svc/cs554-midterm 18080:80` also serves `curl -sS --max-time 5 http://127.0.0.1:18080/`, then stop that forwarder before changing the selector. The baseline had two ready endpoints and both paths succeeded.
+Verify a fresh `kubectl port-forward svc/cs554-midterm 18080:80` also serves `curl -sS --max-time 5 http://127.0.0.1:18080/`, then stop that forwarder before changing the selector. If backgrounding it, wait for the log's Forwarding line and stop it as in Part 3. The baseline had two ready endpoints and both paths succeeded.
 
 ```bash
 diff -u k8s/service.yaml k8s/service-broken.yaml
 # diff exit 1 is expected: only the app selector differs.
-date --iso-8601=seconds > "$HOME/cs554-issue5-failure-start.txt"
+date -u +%Y-%m-%dT%H:%M:%S.%NZ > "$HOME/cs554-issue5-failure-start.txt"
 kubectl apply -f k8s/service-broken.yaml
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
 ```
+
+The timestamp is taken after the baseline requests and immediately before the broken apply, so a baseline request in the same second does not land in the failure window.
 
 ### Failure and diagnosis
 
@@ -316,6 +321,7 @@ kubectl get pods -l app=cs554-midterm
 kubectl get pods --show-labels
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
 kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
+kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o json
 kubectl describe svc cs554-midterm | grep Endpoints
 kubectl get deploy cs554-midterm
 kubectl logs deploy/cs554-midterm --since=2m
@@ -323,7 +329,7 @@ failure_start=$(cat "$HOME/cs554-issue5-failure-start.txt")
 kubectl logs -l app=cs554-midterm --since-time="$failure_start" --timestamps --prefix --tail=-1
 ```
 
-Pods stayed `1/1 Running`, zero restarts, with `app=cs554-midterm`; the selector was `app=cs554-midterm-typo`. The EndpointSlice remained but its endpoint list was `null`, representing zero endpoints; wide output showed `<unset>`, and this kubectl version printed a blank `Endpoints:` value. Both Pods' exact failure-window logs contained only health checks, with zero `GET /` lines. The Deployment UID, generation, and spec were unchanged.
+Pods stayed `1/1 Running`, zero restarts, with `app=cs554-midterm`; the selector was `app=cs554-midterm-typo`. The EndpointSlice remained but its endpoint list was `null`, representing zero endpoints; wide output showed `<unset>`, and this kubectl version printed a blank `Endpoints:` value. Both Pods' exact failure-window logs contained only health checks, with zero `GET /` lines. The Deployment UID, generation, and spec were unchanged (the optional continuity snapshots in the CS 554 section can be taken before and after this experiment as well).
 
 The mismatch made the EndpointSlice controller select no backends, leaving the Service with its DNS name and ClusterIP but nowhere to route traffic. Pod health alone cannot establish Service reachability: the application can answer its own readiness probe while an unrelated selector excludes it. Diagnose the selector, Pod labels, and EndpointSlices together rather than stopping at healthy Pod status.
 
@@ -349,9 +355,9 @@ echo "recovered on attempt ${recovered:-none}"
 kubectl get pods -l app=cs554-midterm --show-labels
 ```
 
-The first in-cluster request after the restore can still fail for a second or so: the EndpointSlice is updated as soon as the selector matches again, but kube-proxy rewrites the node's forwarding rules asynchronously, so a successful request, not a populated EndpointSlice, is the recovery criterion. The recorded run recovered on the first attempt; a scripted rehearsal also recovered on the first attempt after this retry was added.
+The first in-cluster request after the restore can still fail for a second or so: the EndpointSlice is updated as soon as the selector matches again, but kube-proxy rewrites the node's forwarding rules asynchronously, so a successful request, not a populated EndpointSlice, is the recovery criterion. The recorded run recovered on the first attempt; scripted rehearsals needed one or two attempts.
 
-Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; section 4 of [the LaTeX report](docs/report/main.tex) discusses the experiment.
+Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. If backgrounding it, wait for the log's Forwarding line and stop it as in Part 3. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; section 4 of [the LaTeX report](docs/report/main.tex) discusses the experiment.
 
 ## CS 554 extension — resource settings and readiness
 
@@ -417,7 +423,7 @@ kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o yaml
 kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do curl -sS --max-time 5 http://cs554-midterm/; echo; done'
 ```
 
-A became `0/1 Running` with zero restarts within two probe periods. Its probe failed with HTTP 503, but a direct root request still succeeded with count 5, continuing from 4. A remained listed in the EndpointSlice with `ready: false` and `serving: false`; B stayed `ready: true`. All ten Service-DNS requests reached B. This tests ready-backend eligibility through ClusterIP routing; port-forward is not used because it pins to one Pod.
+A became `0/1 Running` with zero restarts after two consecutive failing probes (about ten seconds with this period, plus status propagation; a rehearsal first showed `0/1` at twelve seconds). Its probe failed with HTTP 503, but a direct root request still succeeded with count 5, continuing from 4. A remained listed in the EndpointSlice with `ready: false` and `serving: false`; B stayed `ready: true`. All ten Service-DNS requests reached B. This tests ready-backend eligibility through ClusterIP routing; port-forward is not used because it pins to one Pod.
 
 ### Restore and prove process continuity
 
@@ -454,13 +460,19 @@ kubectl delete -f k8s/client-pod.yaml -f k8s/service.yaml -f k8s/deployment.yaml
 docker compose -f compose/compose.yaml down
 k3d cluster delete cs554
 docker rmi cs554-midterm:1.1
+docker ps -a
+docker image ls
+docker compose ls --all
+k3d cluster list
 ```
 
-The ignored `compose/.env` and the checkout remain; remove only what you created; do not prune anything else on the VM.
+What remains: the checkout, the ignored `compose/.env`, the `$HOME/cs554-issue5-*` captures, any `.qualification/` snapshots, and the pulled base and tool images (`node:22-alpine`, `rancher/k3s`, the k3d helper images). Remove only what you created; do not prune shared images.
 
 ## Report (LaTeX)
 
 The report source is [docs/report/main.tex](docs/report/main.tex), with its bibliography in [docs/report/references.bib](docs/report/references.bib). Overleaf uses GitHub Sync with this repository; the report source is managed there. To compile locally with pdfLaTeX, BibTeX, and `latexmk`, run:
+
+Compile on a machine with pdfLaTeX, BibTeX, and `latexmk`; the VM recipe does not install TeX. CI compiles the report on every push, so the VM is not needed for it.
 
 ```text
 cd docs/report
