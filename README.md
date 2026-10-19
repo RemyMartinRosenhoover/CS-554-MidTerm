@@ -6,6 +6,7 @@ One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux
 
 **Course:** CS 454/554 — Introduction to Cloud Computing, Fall 2026
 **Walkthrough video (3–5 min):** TODO — link
+**Recording preparation:** [Verified shot list and staging checklist](docs/video-shotlist.md).
 
 ## Repository layout
 
