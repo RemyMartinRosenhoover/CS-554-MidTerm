@@ -308,6 +308,8 @@ cat "$HOME/cs554-issue5-broken-forward.log"
 
 The fresh forwarder terminated with exit 1 and `error: timed out waiting for the condition`; both client paths failed with curl exit 7. The in-cluster request depends on Service DNS and ClusterIP routing. Port-forward must select a matching Pod anew; an old session would remain pinned and could hide the broken selector. No forwarder remains running after these captures.
 
+If the first of the three requests still succeeds, the node's rules had not yet caught up with the emptied EndpointSlice; the following requests fail.
+
 ```bash
 kubectl get pods -l app=cs554-midterm
 kubectl get pods --show-labels
@@ -337,9 +339,16 @@ test "$count" -eq 2 || { echo 'Two ready endpoints did not return'; exit 1; }
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
 kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
 kubectl describe svc cs554-midterm | grep -E 'Selector|Endpoints'
-kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
+recovered=
+for attempt in $(seq 1 20); do
+    if kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/; then recovered=$attempt; break; fi
+    sleep 1
+done
+echo "recovered on attempt ${recovered:-none}"
 kubectl get pods -l app=cs554-midterm --show-labels
 ```
+
+The first in-cluster request after the restore can still fail for a second or so: the EndpointSlice is updated as soon as the selector matches again, but kube-proxy rewrites the node's forwarding rules asynchronously, so a successful request, not a populated EndpointSlice, is the recovery criterion. The recorded run recovered on the first attempt; a scripted rehearsal also recovered on the first attempt after this retry was added.
 
 Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; section 4 of [the LaTeX report](docs/report/main.tex) discusses the experiment.
 
