@@ -1,10 +1,10 @@
 # CS 454/554 Midterm Mini-Project — One Service, Two Deployment Environments
 
-> **Work in progress.** Deployment and experiment evidence for Parts 1–4 and the CS 554 extension are complete; the technical report and walkthrough remain. Sections marked `TODO` are not yet done.
+> **Complete except the walkthrough video link.**
 
 One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux virtual machine, and a local Kubernetes cluster running two replicas. The project records how each environment manages the service, investigates a deliberately broken Service selector, runs a readiness experiment (CS 554), and explains how the same workload would be deployed on OpenStack.
 
-**Student:** TODO (name, course section)
+**Course:** CS 454/554 — Introduction to Cloud Computing, Fall 2026
 **Walkthrough video (3–5 min):** TODO — link
 
 ## Repository layout
@@ -65,7 +65,8 @@ The import phase refuses to overwrite an existing VM. Do not rerun creation/conf
 The service in `app/` is the course starter (`cs454-midterm-starter`, copied from the course exercises repository at commit `8c572c1`), with only an additive `/health` readiness-file toggle for the CS 554 experiment. It is dependency-free and needs Node.js 22 or newer; the Dockerfile remains unchanged.
 
 ```bash
-cd app && npm test          # unit test: configuration, counter, health, fresh instance
+# From the repository root: configuration, counter, health, and readiness tests.
+npm --prefix app test
 docker build -t cs554-midterm:1.1 app
 ```
 
@@ -182,7 +183,7 @@ kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
 kubectl describe svc cs554-midterm
 ```
 
-The resources use namespace `default`. The Deployment has two replicas labeled `app=cs554-midterm,tier=web`. The ClusterIP Service selects `app=cs554-midterm`, exposes port 80, and targets named container port `http` (8080). Only the three explicitly listed manifests are applied: `service-broken.yaml` is committed for the later selector experiment and must not be applied here. Client dry-run validates it without changing the running Service.
+The resources use namespace `default`. The Deployment has two replicas labeled `app=cs554-midterm,tier=web`. The ClusterIP Service selects `app=cs554-midterm`, exposes port 80, and targets named container port `http` (8080). Only the three explicitly listed manifests are applied: `service-broken.yaml` is reserved for the controlled selector experiment in Part 4 and must not be applied during normal deployment. Client dry-run validates it without changing the running Service.
 
 ### Access through the Service
 
@@ -233,7 +234,7 @@ kubectl delete -f k8s/client-pod.yaml -f k8s/service.yaml -f k8s/deployment.yaml
 kubectl get all
 ```
 
-Only the default `kubernetes` Service remained after application cleanup; the k3d cluster and Compose service were not deleted. The three manifests were subsequently reapplied with the deploy commands above, and two ready replicas plus the client Pod were left running for the selector experiment. The broken Service and readiness experiment have not been applied.
+Only the default `kubernetes` Service remained after application cleanup; the k3d cluster and Compose service were not deleted. The three manifests were subsequently reapplied with the deploy commands above. The selector and readiness experiments are complete and all temporary changes were restored; the correct Service, two ready replicas, and client Pod remain running.
 
 ## Part 4 — Controlled troubleshooting
 
@@ -305,11 +306,11 @@ kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
 kubectl get pods -l app=cs554-midterm --show-labels
 ```
 
-Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; the technical report will discuss the experiment in section 4 of `docs/report.md`.
+Wait for two ready endpoints, then start a fresh `kubectl port-forward svc/cs554-midterm 18080:80` and retry the VM-local curl; stop it afterward. Both paths recovered when the selector returned to `app=cs554-midterm`. The same Pod names, UIDs, labels, and zero restart counts were verified before and after; only the Service needed correction. The correct Service, two ready replicas, client Pod, and Compose service remain running. Complete raw baseline/change/failure/diagnosis/recovery captures are in `evidence/03-selector-break.md`; section 4 of [the LaTeX report](docs/report/main.tex) discusses the experiment.
 
 ## CS 554 extension — resource settings and readiness
 
-See `k8s/deployment.yaml`, `evidence/04-readiness-554.md`, and section 6 of `docs/report.md`.
+See `k8s/deployment.yaml`, `evidence/04-readiness-554.md`, and section 6 of [the LaTeX report](docs/report/main.tex).
 
 The deployed settings are in `k8s/deployment.yaml`: CPU/memory requests of `50m`/`64Mi` and limits of `250m`/`128Mi`, yielding Burstable QoS because requests differ from limits. Requests reserve scheduling capacity; CPU limits constrain CPU time and exceeding the memory limit can cause an OOM kill. Readiness checks `/health` on named port `http`, with initial delay 2 seconds, period 5 seconds, failure threshold 2, and success threshold 1 (default timeout 1 second). Readiness governs Service traffic eligibility, not process restart; there is deliberately no liveness probe.
 
@@ -376,12 +377,29 @@ kubectl get deploy cs554-midterm -o jsonpath='{.metadata.generation}'
 
 A recovered within one probe period, both endpoints became ready, and Service requests again reached both hostnames. A's next direct request counted 6: readiness had not restarted the process or reset its state. Pod names, UIDs, container IDs, start times, and zero restarts matched the baseline; Deployment generation stayed 2 and its template was identical throughout. Every temporary change was restored by recreating the file. Both environments remain running on image `1.1`; complete captures and the unchanged probe/resource excerpt are in `evidence/04-readiness-554.md`.
 
+## Report (LaTeX)
+
+The report source is [docs/report/main.tex](docs/report/main.tex), with its bibliography in [docs/report/references.bib](docs/report/references.bib). Overleaf uses GitHub Sync with this repository; the report source is managed there. To compile locally with pdfLaTeX, BibTeX, and `latexmk`, run:
+
+```text
+cd docs/report
+latexmk -pdf main.tex
+```
+
+CI compiles the report on every push and pull request and publishes the PDF as the `report-pdf` workflow artifact. Open [Actions](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions), select the latest successful `ci` run, and download `report-pdf` under Artifacts. `docs/report/main.pdf` is committed at submission time; until then use the CI artifact. The editable diagram source is [docs/diagram.svg](docs/diagram.svg).
+
 ## Report and evidence
 
-- Report: `docs/report.md` (diagram, Compose vs Kubernetes comparison, OpenStack analysis, CS 554 extension)
-- Diagram: `docs/diagram.svg`
-- Evidence log: `evidence/`
-- References: `docs/references.md`
+- [Report source](docs/report/main.tex): LaTeX source for the deployment analysis, diagram, OpenStack plan, and CS 554 interpretation.
+- [Compiled report](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions): latest successful `ci` run, then Artifacts, then `report-pdf`.
+- [Deployment diagram](docs/diagram.svg): host, VM, Compose container, k3d cluster, and request paths with addresses and ports.
+- [References](docs/references.md): numbered source list mirrored from the report's BibTeX bibliography.
+- [Evidence index](evidence/README.md): capture format and file map.
+- [Host and VM](evidence/00-host-vm.md): VM configuration, tools, networking, reachability, and TLS verification.
+- [Docker Compose](evidence/01-compose.md): image build, requests, health, logs, counter restart, and cleanup.
+- [Kubernetes](evidence/02-kubernetes.md): image import, two ready replicas, Service traffic, resources, and automatic Pod replacement.
+- [Selector troubleshooting](evidence/03-selector-break.md): baseline, intentional mismatch, client failure, diagnosis, correction, and recovery.
+- [CS 554 readiness](evidence/04-readiness-554.md): image 1.1 rollout, one running NotReady replica, ready-backend traffic, recovery, and process continuity.
 
 ## Manual setup steps
 
