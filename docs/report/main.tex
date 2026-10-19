@@ -27,6 +27,12 @@
 % Evidence citation: \evid{file}{section} → (evidence/file, section)
 \newcommand{\evid}[2]{\textsf{\footnotesize(evidence/#1, #2)}}
 \newcommand{\code}[1]{\texttt{#1}}
+% Placeholder box for unwritten sections: visible in the PDF so the questions can be read on any device.
+\usepackage{framed}
+\definecolor{todobg}{RGB}{255,247,214}
+\newenvironment{todobox}{\begin{shaded*}\small}{\end{shaded*}}
+\colorlet{shadecolor}{todobg}
+\newcommand{\todo}[1]{\begin{todobox}#1\end{todobox}}
 
 \title{One Service, Two Deployment Environments\\
 \large CS 454/554 Midterm Mini-Project --- Technical Report}
@@ -74,18 +80,18 @@ The observations separate the cause from everything it was not. Both Pods stayed
 Healthy Pods therefore prove nothing about reachability through a Service. Readiness is a statement about a process: it can serve. A Service's endpoints are a statement about a match: these Pods carry the labels this selector names. The two are evaluated independently, and either can be true while the other is false. A diagnosis that stops at \code{kubectl get pods} sees two healthy replicas and no problem; it must also compare the selector to the labels, inspect the EndpointSlice, and test a client path that depends on the match.
 
 \section{OpenStack deployment analysis}
-% STUDENT-AUTHORED. Target 500–750 words across §5.1–§5.5 and the closing comparison (table excluded).
-% Course material: Exercise 05 README and OPENSTACK-SETTINGS.md in the course repository (cite as \cite{ex05,ex05settings}).
-% Concrete class names: profile devstack, region RegionOne, image ubuntu-24.04, flavor m1.small,
-%   network private / subnet private-subnet, router router1, external network public,
-%   floating IP from public, security group default + rules, student key pair, cloud-init user data.
+% STUDENT-AUTHORED. Target 500--750 words across 5.1--5.6, excluding the table.
+% Each subsection below begins with a shaded "To answer" box listing the handout's questions
+% and the facts to use. Write your prose over the box: delete the \todo{...} block once the
+% subsection is written. Cite course material with \cite{ex05} and \cite{ex05settings}, and
+% OpenStack docs with \cite{os-keystone}, \cite{os-glance}, \cite{os-nova}, \cite{os-neutron},
+% \cite{os-secgroups}, \cite{os-floating}.
+
+\todo{\textbf{What this whole section must do (handout, Part 5).} Write a concrete plan for deploying this exact workload (the one container, run by Compose, inside one VM) on the instructor-provided OpenStack cloud used in Exercise 05. It is a deployment plan, not an installation guide: nothing here installs OpenStack. Use course material and cite anything else. Total length 500--750 words across the six subsections. Concrete class names to use: cloud profile \code{devstack}, region \code{RegionOne}, image \code{ubuntu-24.04}, flavor \code{m1.small}, network \code{private} with subnet \code{private-subnet}, router \code{router1} to external network \code{public}, a floating IP from \code{public}, security group \code{default} plus rules I add, a key pair I create, and cloud-init user data.}
 
 \subsection{Resources and choices}
-% Table of resource · value · created by me / supplied by the admin, then prose:
-% justify the modest flavor from our own numbers (free -h: 505 MiB used of 3.8 GiB with the service running);
-% whether persistent block storage is needed (the counter is deliberately in-process; the image rebuilds from the repo).
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering\small
 \begin{tabular}{@{}lll@{}}
 \toprule
@@ -104,56 +110,71 @@ User data & cloud-init: install Docker, run Compose & me \\
 \caption{OpenStack resources for the workload, following the class environment \cite{ex05settings}.}
 \end{table}
 
-% TODO (student): prose for §5.1.
+\todo{\textbf{To answer in 5.1 (about 120--150 words).}
+\begin{enumerate}
+\item Name every resource the deployment needs: image, flavor, key pair, tenant network and subnet, the router that connects the tenant network to the external network, the security group, and the floating IP. The table does this; the prose should say in a sentence or two how they fit together.
+\item Justify a modest VM size. Facts to use: the service is one Node process; with it running, our VM showed 505~MiB used of 3.8~GiB total (\code{free -h}, evidence/00-host-vm.md), so \code{m1.small} (the smallest class flavor that boots Ubuntu comfortably) is more than enough; a larger flavor buys nothing for this workload.
+\item State which resources I create and which the cloud administrator already supplies. Facts: the admin supplies the image, the flavors, the external network \code{public}, the router \code{router1}, and the tenant network \code{private}; I create the key pair, the security-group rules, the server, and the floating IP.
+\item Say whether persistent block storage (a Cinder volume) is needed for this workload, and why. Facts: no. The request counter is deliberately in-process and expected to reset; the container image is rebuilt from the repository; nothing on the instance must outlive the instance, so the ephemeral root disk from the flavor suffices.
+\end{enumerate}}
 
 \subsection{Service responsibilities}
-% Keystone (authenticate the CLI via the devstack profile; scope to the project), Glance (store/serve the image),
-% Nova (schedule and boot the instance from image + flavor; inject key pair and user data),
-% Neutron (port on private, router1 to public, floating IP mapping, security-group rules).
-% Where Compose fits: cloud-init user data installs Docker + Compose and runs `docker compose up -d` from the repo,
-% exactly as our VM build did, so the instance converges with no login. Cinder: not proposed; say when it would be.
-% TODO (student).
+
+\todo{\textbf{To answer in 5.2 (about 120--150 words).} Explain the role each OpenStack service plays, in the order the deployment happens:
+\begin{enumerate}
+\item \textbf{Keystone} (identity): authenticates me and scopes me to my project. In the class setup the \code{devstack} cloud profile holds the credentials and endpoint list; every \code{openstack} command starts by getting a token from Keystone.
+\item \textbf{Glance} (image): stores and serves the \code{ubuntu-24.04} image that the instance boots from.
+\item \textbf{Nova} (compute): takes the image, the flavor, the key pair, the network, and the user data, schedules the instance onto a compute host, and boots it; the key pair becomes the authorized SSH key inside the VM.
+\item \textbf{Neutron} (networking): creates the instance's port on \code{private}, routes it through \code{router1} to \code{public}, maps the floating IP to that port, and enforces the security-group rules on it.
+\item \textbf{Where Docker Compose fits once the VM exists}: in the cloud-init user data. The user data installs Docker and the Compose plugin and runs \code{docker compose up -d} from a clone of the repository, exactly as our VM build did with cloud-init, so the instance converges to a running service with no interactive login.
+\item \textbf{Cinder}: not proposed for this workload. One sentence on when it would be: only if something on the instance had to survive instance deletion, such as persistent logs or application data.
+\end{enumerate}}
 
 \subsection{Request path}
-% External client → floating IP on public → router1 NAT to the instance's private address → security group on the port
-% evaluates the rule → VM kernel → Docker published 8080 → container → Node process.
-% Name the rule (ingress TCP 8080) and distinguish it from TCP 22 (SSH, operators only) and ICMP (ping, diagnostic, optional).
-% Security groups are stateful: no egress rule needed for the reply.
-% TODO (student).
+
+\todo{\textbf{To answer in 5.3 (about 100--130 words).} Trace one HTTP request from an external client to the application, naming each hop:
+\begin{enumerate}
+\item The client sends \code{GET http://<floating-ip>:8080/} to the floating IP, which lives on the external network \code{public}.
+\item \code{router1} performs the NAT from the floating IP to the instance's private address on \code{private-subnet}.
+\item Neutron's security group on the instance's port evaluates the packet against its rules.
+\item The VM's kernel delivers it to the port Docker published (8080), Docker forwards it into the container, and the Node process answers.
+\item Name the security-group rule the application needs: ingress TCP, destination port 8080, from the client's source range. Distinguish it from the SSH rule (TCP 22, for operators only) and from ICMP (ping; optional, useful only for diagnosis). Note that security groups are stateful, so the reply needs no separate egress rule. (The class exercise opened port 3000 for its service \cite{ex05}; ours listens on 8080.)
+\end{enumerate}}
 
 \subsection{Failure analysis}
-% Instance ACTIVE, client cannot reach the service. Layered checks with the evidence collected at each:
-% (1) on the instance: docker compose ps, curl localhost:8080/health, container logs  → app/container layer
-% (2) VM network: ip addr, ss -ltnp (8080 bound on 0.0.0.0), host firewall                → VM layer
-% (3) cloud network: server show (addresses), floating ip list (association), security group rule list, router show
-% (4) client: curl -v to the floating IP; ping if ICMP allowed.  Say which layer "refused" vs "timeout" vs "404" points to.
-% TODO (student).
+
+\todo{\textbf{To answer in 5.4 (about 120--150 words).} Scenario: \code{openstack server show} says the instance is \code{ACTIVE}, but an external client cannot reach the service. Give a logical sequence of checks that separates application and container problems from VM and cloud-network problems, and say what evidence you collect at each layer:
+\begin{enumerate}
+\item \textbf{Application and container}, on the instance (console or SSH): \code{docker compose ps}, \code{curl http://localhost:8080/health}, \code{docker compose logs}. If this fails, the problem is below the network entirely.
+\item \textbf{VM network}: \code{ip addr} (does the instance have its private address), \code{ss -ltnp} (is 8080 bound on \code{0.0.0.0}, not only loopback), any host firewall such as \code{ufw status}.
+\item \textbf{Cloud network}: \code{openstack server show} (addresses), \code{openstack floating ip list} (is the floating IP associated with this instance's port), \code{openstack security group rule list default} (is there an ingress rule for TCP 8080), \code{openstack router show router1} (does the router have its external gateway).
+\item \textbf{Client side}: \code{curl -v} to the floating IP; ping only if ICMP is allowed.
+\item Say what each symptom points to: ``connection refused'' means the packet reached a host with nothing listening (application or published-port layer); a timeout means it was dropped on the way (security group, floating IP, or router); an HTTP 404 means the application answered but the path is wrong.
+\end{enumerate}}
 
 \subsection{Operational complexity}
-% Running OpenStack = Keystone, Glance, Nova, Neutron + databases, message queue, agents on every compute node,
-% so that a user can run one `server create`. One example from the class demonstration or troubleshooting discussion
-% (your own memory of class is best; fallback: the course's DevStack notes say a rebuild beats repairing a broken install,
-% and the restricted-network appendix shows a TLS-intercepting proxy breaking image pulls inside cloud VMs).
-% Distinguish an infrastructure setup problem (stops every tenant; the operator fixes it) from an application deployment
-% problem (one project; the user fixes it).
-% TODO (student).
+
+\todo{\textbf{To answer in 5.5 (about 100--130 words).}
+\begin{enumerate}
+\item Explain why operating an OpenStack cloud involves more components and dependencies than deploying an application into a cloud that already works: to let a user run one \code{server create}, the operator runs Keystone, Glance, Nova, and Neutron, each with its database, a shared message queue, and agents on every compute and network node, all of which must agree.
+\item Use \textbf{one example from the class demonstration or troubleshooting discussion}. Your own memory of class is best. Fallback from the course material: the course's DevStack notes say that rebuilding from a clean VM snapshot is usually easier than repairing a broken DevStack installation \cite{ex05}; and the restricted-network appendix shows a corporate TLS-intercepting proxy breaking image pulls inside the cloud's own VMs, a platform-level trust problem no tenant can fix \cite{restricted}.
+\item Distinguish an \textbf{infrastructure setup problem} (a Neutron agent down, a broken DevStack, an untrusted CA at the platform layer: it stops every tenant and only the operator can fix it) from an \textbf{application deployment problem} (a missing security-group rule, a Compose file publishing the wrong port: it affects one project and the user fixes it).
+\end{enumerate}}
 
 \subsection{Closing comparison}
-% When a VM with Compose is sufficient; what Kubernetes added in our experiment (declared replica count enforced,
-% automatic replacement, readiness-based traffic exclusion, a Service abstraction a selector can silently break).
-% TODO (student).
+
+\todo{\textbf{To answer in 5.6 (about 60--90 words).} When is a VM with Compose sufficient? (One instance, one process, an operator present, a manual restart acceptable, no need to scale.) What additional behavior did Kubernetes provide in our experiment? (A declared replica count enforced without intervention; a deleted Pod replaced automatically by a new one; readiness-based exclusion of an unhealthy replica from traffic; and a Service abstraction that a wrong selector can silently break, which is the cost of that indirection.)}
 
 \section{CS 554 extension: resource settings and the readiness experiment}
-% STUDENT-AUTHORED. Target 200–300 words.
-% Settings: requests 50m/64Mi, limits 250m/128Mi (QoS Burstable). Request = what the scheduler reserves; limit = the ceiling
-% enforced at run time (CPU throttled; memory → OOM kill). Why these numbers: the service is one Node process; the VM
-% showed 505 MiB used in total with it running; 250m leaves burst headroom without one replica starving the other on 2 vCPUs.
-% Readiness vs restart: the probe governs endpoint membership. In the experiment Pod A went 0/1 Running with 0 restarts,
-% its counter continued 4 → 5 → 6 across failure and recovery, and all in-cluster traffic went to B
-% (evidence/04-readiness-554.md). A liveness failure or restart would have produced a new process and a reset counter.
-% Why this method: a running Pod's probe is immutable, so the documented application toggle (READINESS_FILE) was the
-% permitted route; the template changed only in the pre-experiment rollout; the experiment touched one file in one Pod.
-% TODO (student).
+% STUDENT-AUTHORED. Target 200--300 words. Cite \cite{k8s-resources}, \cite{k8s-qos}, \cite{k8s-probes}.
+
+\todo{\textbf{To answer in section 6 (200--300 words total).}
+\begin{enumerate}
+\item \textbf{The resource settings and why}: requests \code{cpu: 50m}, \code{memory: 64Mi}; limits \code{cpu: 250m}, \code{memory: 128Mi} (QoS class \code{Burstable}, because requests differ from limits). Facts: the service is one Node process; the VM showed 505~MiB used in total with it running; two replicas on a 2-vCPU node; the limits leave burst headroom without letting one replica starve the other.
+\item \textbf{Distinguish a request from a limit}: a request is what the scheduler reserves on a node to place the Pod; a limit is the ceiling enforced at run time (CPU above the limit is throttled; memory above the limit gets the container killed).
+\item \textbf{How readiness affects Service traffic, and how it differs from restarting a container}: the readiness probe governs whether the Pod is a ready endpoint of the Service; it does not restart anything. Facts from the experiment (evidence/04-readiness-554.md): after the toggle, Pod A was \code{0/1 Running} with \code{RESTARTS 0}; its EndpointSlice entry went \code{ready: false}; all ten in-cluster requests went to Pod B; A still answered a direct request and its counter continued 4~$\rightarrow$~5~$\rightarrow$~6 across failure and recovery. A liveness failure or a restart would have produced a new process and a reset counter, which did not happen.
+\item \textbf{Why this method}: a running Pod's readiness probe is immutable, so a per-Pod probe patch is not possible; the documented application-level toggle (\code{READINESS\_FILE}) was the handout's permitted alternative. The Deployment template changed only in the rollout before the baseline; the experiment itself touched one file in one Pod and restored it.
+\end{enumerate}}
 
 \bibliographystyle{unsrt}
 \bibliography{references}
