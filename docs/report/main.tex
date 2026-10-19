@@ -1,6 +1,10 @@
 % CS 454/554 Midterm Mini-Project — Technical Report
 % Build: latexmk -pdf main.tex   (Overleaf: compiler pdfLaTeX, main document main.tex; bibliography via BibTeX, style unsrt)
 %
+% Overleaf is linked to the whole GitHub repository through GitHub Sync (Menu → GitHub).
+% In Overleaf, edit ONLY files under docs/report/. Pull from GitHub before editing; push when you stop.
+% CI compiles this file on every push and publishes the PDF as the "report-pdf" workflow artifact.
+%
 % Ownership convention for collaboration:
 %   Sections 1–4 and the appendix: drafted by Claude from the evidence files; the student revises.
 %   Sections 5 and 6: written by the student; Claude edits for length and traceability.
@@ -38,7 +42,7 @@ The project runs one small HTTP service in two environments and records how each
 
 Both environments use one container image, built once inside the VM from \code{app/Dockerfile}. Compose runs it from the local Docker image store; the cluster receives it through \code{k3d image import}, and the Deployment sets \code{imagePullPolicy: Never} so the cluster can only use the imported image \evid{02-kubernetes.md}{Import the same application image}. No registry is involved. The image was first built as \code{cs554-midterm:1.0}; the CS~554 readiness experiment added a four-line readiness toggle to \code{/health} and rebuilt as \code{1.1}, which both environments now run. Earlier captures that show \code{1.0} are unchanged and historical.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{figures/diagram.pdf}
   \caption{Host, VM, container, and application layers, with the Part~2 request path from the host (solid) and the in-cluster Kubernetes path (dashed). Ports and addresses are labeled as observed.}
@@ -55,7 +59,7 @@ The restart experiment is the observation the rest of the report leans on. With 
 
 \section{Kubernetes}
 
-The cluster runs inside the same VM: k3d creates the node as a Docker container, pinned to \code{rancher/k3s:v1.37.1-k3s1} so the server matches the installed kubectl 1.37.1 \evid{02-kubernetes.md}{Create the cluster}. A Deployment named \code{cs554-midterm} asks for two replicas of the image, labels its Pods \code{app=cs554-midterm}, and a ClusterIP Service of the same name selects that label and maps port 80 to the container's named port \code{http} (8080). After \code{kubectl apply}, the Deployment reported \code{2/2}, both Pods were \code{1/1 Running}, and the Service's EndpointSlice listed two endpoints \evid{02-kubernetes.md}{Apply and two ready replicas}.
+The cluster runs inside the same VM: k3d creates the node as a Docker container from the image \code{rancher/k3s:v1.37.1-k3s1}, pinned so that the server matches the installed kubectl 1.37.1 \evid{02-kubernetes.md}{Create the cluster}. A Deployment named \code{cs554-midterm} asks for two replicas of the image, labels its Pods \code{app=cs554-midterm}, and a ClusterIP Service of the same name selects that label and maps port 80 to the container's named port \code{http} (8080). After \code{kubectl apply}, the Deployment reported \code{2/2}, both Pods were \code{1/1 Running}, and the Service's EndpointSlice listed two endpoints \evid{02-kubernetes.md}{Apply and two ready replicas}.
 
 Requests were sent through the Service in two ways, because they demonstrate different things. From a client Pod inside the cluster, six requests to \code{http://cs554-midterm/} by DNS name were answered by both Pods, each with its own counter; this shows the Service resolving to ready backends across replicas, though not round-robin ordering or fairness \evid{02-kubernetes.md}{In-cluster Service requests}. A \code{kubectl port-forward svc/cs554-midterm 18080:80} session inside the VM answered three requests all from one Pod: port-forward uses the Service's selector only to choose a Pod, then tunnels to that Pod through the API server, so it proves reachability but says nothing about traffic distribution \evid{02-kubernetes.md}{VM-local Service port-forward}.
 
