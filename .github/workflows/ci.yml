@@ -72,3 +72,29 @@ jobs:
         run: >
           docker run --rm -v "$PWD/k8s:/k8s:ro" ghcr.io/yannh/kubeconform:latest
           -strict -summary -ignore-missing-schemas /k8s
+
+  report:
+    # Compiles docs/report/main.tex so the grader always has a current PDF
+    # without anyone remembering to export one. The PDF is a build artifact,
+    # not a tracked file.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect the report
+        id: have
+        shell: bash
+        run: echo "tex=$([ -f docs/report/main.tex ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Compile the report
+        if: steps.have.outputs.tex == 'true'
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: main.tex
+          working_directory: docs/report
+          latexmk_use_lualatex: false
+      - name: Upload the PDF
+        if: steps.have.outputs.tex == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-pdf
+          path: docs/report/main.pdf
+          if-no-files-found: error

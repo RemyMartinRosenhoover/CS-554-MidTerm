@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d4ed8"/>
+    </marker>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#047857"/>
+    </marker>
+  </defs>
+  <rect width="960" height="600" fill="#ffffff"/>
+
+  <!-- Host -->
+  <rect x="20" y="20" width="920" height="520" rx="10" fill="#f8fafc" stroke="#334155" stroke-width="2"/>
+  <text x="34" y="44" font-weight="bold" font-size="15">Physical host: Windows 11, VMware Workstation 17.6.1</text>
+  <text x="34" y="64" fill="#334155">VMnet8 host adapter 192.168.197.1/24 (VMware NAT)</text>
+
+  <!-- Host-side client box -->
+  <rect x="34" y="84" width="166" height="70" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="44" y="106" font-weight="bold">client on the host</text>
+  <text x="44" y="124" font-size="12">curl.exe</text>
+  <text x="44" y="142" font-size="11">GET http://192.168.197.134:8080/</text>
+
+  <!-- VM -->
+  <rect x="210" y="84" width="710" height="440" rx="10" fill="#eef2ff" stroke="#4338ca" stroke-width="2"/>
+  <text x="224" y="108" font-weight="bold" font-size="15">VM cs554-vm: Ubuntu Server 24.04.5, 2 vCPU, 4 GiB, 25 GiB</text>
+  <text x="224" y="128" fill="#3730a3">ens192 192.168.197.134/24 (DHCP from VMware)   ·   Docker Engine 29.1.3</text>
+
+  <!-- Compose side -->
+  <rect x="226" y="150" width="320" height="350" rx="8" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.5"/>
+  <text x="240" y="172" font-weight="bold">Part 2: Docker Compose 2.40.3</text>
+  <text x="240" y="190" fill="#1e3a8a">published port 8080 → container 8080</text>
+  <rect x="242" y="206" width="288" height="112" rx="6" fill="#dbeafe" stroke="#1d4ed8"/>
+  <text x="254" y="228" font-weight="bold">container compose-web-1</text>
+  <text x="254" y="246">image cs554-midterm:1.1</text>
+  <text x="254" y="264" font-size="12">env PORT=8080, SERVICE_NAME, MESSAGE</text>
+  <rect x="254" y="276" width="264" height="32" rx="4" fill="#ffffff" stroke="#1d4ed8"/>
+  <text x="264" y="297">process: node src/server.js  :8080</text>
+  <text x="240" y="346" font-size="12" fill="#334155">healthcheck: wget /health every 10 s</text>
+  <text x="240" y="364" font-size="12" fill="#334155">(counted requests: GET / only)</text>
+  <text x="240" y="392" font-size="12" fill="#334155">counter lives in this process:</text>
+  <text x="240" y="410" font-size="12" fill="#334155">docker compose restart → new process</text>
+  <text x="240" y="428" font-size="12" fill="#334155">→ count resets to 1 (observed 5 → 1)</text>
+
+  <!-- k3d side -->
+  <rect x="560" y="150" width="344" height="350" rx="8" fill="#ffffff" stroke="#047857" stroke-width="1.5"/>
+  <text x="574" y="172" font-weight="bold">Part 3: k3d 5.9.0 cluster "cs554"</text>
+  <text x="574" y="190" fill="#065f46" font-size="12">node = container k3d-cs554-server-0 (k3s v1.37.1)</text>
+  <rect x="576" y="204" width="312" height="286" rx="6" fill="#ecfdf5" stroke="#047857"/>
+  <text x="588" y="224" font-weight="bold">Pods (namespace default)</text>
+  <rect x="588" y="236" width="140" height="58" rx="4" fill="#d1fae5" stroke="#047857"/>
+  <text x="596" y="254" font-size="12">web Pod A  :8080</text>
+  <text x="596" y="270" font-size="12">cs554-midterm:1.1</text>
+  <text x="596" y="286" font-size="12">readiness GET /health</text>
+  <rect x="736" y="236" width="140" height="58" rx="4" fill="#d1fae5" stroke="#047857"/>
+  <text x="744" y="254" font-size="12">web Pod B  :8080</text>
+  <text x="744" y="270" font-size="12">cs554-midterm:1.1</text>
+  <text x="744" y="286" font-size="12">readiness GET /health</text>
+  <rect x="588" y="322" width="288" height="46" rx="4" fill="#ffffff" stroke="#047857"/>
+  <text x="598" y="340" font-weight="bold" font-size="12">Service cs554-midterm (ClusterIP) :80 → http (8080)</text>
+  <text x="598" y="357" font-size="12">selector app=cs554-midterm → EndpointSlice (ready Pods)</text>
+  <rect x="588" y="394" width="140" height="42" rx="4" fill="#fef3c7" stroke="#b45309"/>
+  <text x="596" y="412" font-size="12">client Pod (curl)</text>
+  <text x="596" y="428" font-size="12">http://cs554-midterm/</text>
+  <text x="740" y="412" font-size="12" fill="#334155">Deployment replicas: 2</text>
+  <text x="740" y="428" font-size="12" fill="#334155">image via k3d image import</text>
+  <text x="588" y="466" font-size="12" fill="#334155">requests 50m/64Mi · limits 250m/128Mi</text>
+  <text x="588" y="482" font-size="12" fill="#334155">no liveness probe (by design)</text>
+
+  <!-- Part 2 request path: host client -> VM NAT address -> published port -> container -> process -->
+  <path d="M 190 154 L 190 292 L 254 292" fill="none" stroke="#1d4ed8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="40" y="200" fill="#1d4ed8" font-size="12">→ VMware NAT to</text>
+  <text x="40" y="216" fill="#1d4ed8" font-size="12">192.168.197.134</text>
+  <text x="40" y="232" fill="#1d4ed8" font-size="12">(direct address,</text>
+  <text x="40" y="248" fill="#1d4ed8" font-size="12">no port forwarding)</text>
+  <text x="40" y="270" fill="#1d4ed8" font-size="12">→ published :8080</text>
+  <text x="40" y="286" fill="#1d4ed8" font-size="12">→ container → process</text>
+
+  <!-- Kubernetes path: client Pod -> Service -> Pod -->
+  <path d="M 658 394 L 658 368" fill="none" stroke="#047857" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrow2)"/>
+  <path d="M 658 322 L 658 294" fill="none" stroke="#047857" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrow2)"/>
+  <path d="M 806 322 L 806 294" fill="none" stroke="#047857" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrow2)"/>
+
+  <!-- Legend -->
+  <text x="34" y="564" font-size="12" fill="#334155">Solid: the Part 2 request path from the host.  Dashed: the in-cluster path by Service DNS (client Pod → ClusterIP :80 → a ready Pod :8080).</text>
+  <text x="34" y="582" font-size="12" fill="#334155">One image in both environments: cs554-midterm:1.1, built once inside the VM; the cluster receives it with k3d image import (no registry).</text>
+</svg>
