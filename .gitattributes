@@ -1,0 +1,2 @@
+*.sh text eol=lf
+scripts/cloud-init/* text eol=lf
