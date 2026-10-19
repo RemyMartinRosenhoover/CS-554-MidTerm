@@ -62,21 +62,22 @@ Test-NetConnection $ip -Port 22
 
 The import phase refuses to overwrite an existing VM. Do not rerun creation/configuration phases against a running VM. This step installs tools only; no container image is pulled and no service or Kubernetes cluster is deployed.
 
-Inside the VM, clone into a writable directory:
+Inside the VM, clone into the home directory:
 
 ```bash
+cd ~
 git clone https://github.com/RemyMartinRosenhoover/CS-554-MidTerm.git
 cd CS-554-MidTerm
-checkout_root=$PWD
 ```
 
-Later Bash commands are relative to this checkout root unless a block explicitly changes directory; return to it with `cd "$checkout_root"`.
+Later Bash commands run from this checkout root, `~/CS-554-MidTerm` (`/home/student/CS-554-MidTerm` in the recorded run), unless a block changes directory. A new terminal or SSH session starts in the home directory, so the first block of each part begins with `cd ~/CS-554-MidTerm`.
 
 ## Part 1 — Build the image
 
 The TLS probe must pass before the test or build command: the test container pulls `node:22-alpine` on a cold VM. Do not bypass certificate validation.
 
 ```bash
+cd ~/CS-554-MidTerm
 bash scripts/vm-tls-probe.sh
 ```
 
@@ -105,7 +106,7 @@ Node/npm need not be installed in the VM; the test container provides Node 22. E
 Run inside the VM, from the public checkout root. The image is built from the unchanged `app/Dockerfile`; Kubernetes uses the same `cs554-midterm:1.1`. The earlier Part 2 capture used `1.0`; `evidence/04-readiness-554.md` records the upgrade and successful Compose requests with `READINESS_FILE` unset.
 
 ```bash
-cd "$checkout_root"
+cd ~/CS-554-MidTerm
 docker build -t cs554-midterm:1.1 app
 docker image ls cs554-midterm
 cd compose
@@ -182,7 +183,7 @@ The complete build, configuration, requests, logs, restart, cleanup, and final s
 Run inside the VM from the checkout root. The cluster runs in k3d containers inside `cs554-vm`, which itself runs in VMware Workstation on the Windows host. Compose can remain running on VM port 8080.
 
 ```bash
-cd "$checkout_root"
+cd ~/CS-554-MidTerm
 bash scripts/vm-tls-probe.sh
 k3d cluster create cs554 --image rancher/k3s:v1.37.1-k3s1 --servers 1 --agents 0
 kubectl cluster-info
@@ -270,6 +271,7 @@ Run this controlled experiment inside the existing VM/cluster from the repositor
 ### Baseline and selector change
 
 ```bash
+cd ~/CS-554-MidTerm
 kubectl get pods -l app=cs554-midterm --show-labels
 kubectl get svc cs554-midterm -o yaml | sed -n '/^spec:/,$p'
 kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
@@ -352,6 +354,7 @@ The deployed settings are in `k8s/deployment.yaml`: CPU/memory requests of `50m`
 A running Pod's readiness probe is immutable, so changing it by a per-Pod patch is not supported here. Instead, the application-level file toggle implements the permitted alternative. The Deployment's image, `READINESS_FILE=/tmp/ready`, and `postStart` command `touch /tmp/ready` were rolled out normally before baseline capture. No Deployment/template changes occurred during the experiment itself.
 
 ```bash
+cd ~/CS-554-MidTerm
 docker build -t cs554-midterm:1.1 app
 cd compose
 docker compose up -d
@@ -436,6 +439,7 @@ cmp .qualification/deploy-before.json .qualification/deploy-after.json
 From the checkout root, after the walkthrough is recorded:
 
 ```bash
+cd ~/CS-554-MidTerm
 kubectl delete -f k8s/client-pod.yaml -f k8s/service.yaml -f k8s/deployment.yaml
 docker compose -f compose/compose.yaml down
 k3d cluster delete cs554
