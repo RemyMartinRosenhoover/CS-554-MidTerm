@@ -34,6 +34,8 @@ Host: Windows 11, Windows PowerShell 5.1, Windows OpenSSH client (`ssh`, `scp`, 
 
 Guest: the Ubuntu noble server cloud OVA, verified against its published SHA256SUMS. Cloud-init installs `docker.io`, `docker-compose-v2`, `curl`, `ca-certificates`, `jq`, `git`, and `openssl`; provisioning installs `gnupg`, kubectl from the course's Kubernetes v1.37 APT repository, and k3d from its upstream installer. Actual versions are recorded above and in `evidence/00-host-vm.md`. Guest `student` authenticates with the project SSH key and has passwordless sudo. No password is configured.
 
+If another cluster or Compose project already exists on the VM, use distinct names and a separate kubeconfig; the recipes assume a VM dedicated to this project.
+
 From the repository root, use these separate PowerShell phases. Keys, downloads, generated cloud-init, known-hosts and logs stay in a working folder outside the repository (the scripts default to `$env:USERPROFILE\codex-work`); never commit them.
 
 ```powershell
@@ -60,15 +62,33 @@ Test-NetConnection $ip -Port 22
 
 The import phase refuses to overwrite an existing VM. Do not rerun creation/configuration phases against a running VM. This step installs tools only; no container image is pulled and no service or Kubernetes cluster is deployed.
 
+Inside the VM, clone into a writable directory:
+
+```bash
+git clone https://github.com/RemyMartinRosenhoover/CS-554-MidTerm.git
+cd CS-554-MidTerm
+checkout_root=$PWD
+```
+
+Later Bash commands are relative to this checkout root unless a block explicitly changes directory; return to it with `cd "$checkout_root"`.
+
 ## Part 1 — Build the image
+
+The TLS probe must pass before the test or build command: the test container pulls `node:22-alpine` on a cold VM. Do not bypass certificate validation.
+
+```bash
+bash scripts/vm-tls-probe.sh
+```
 
 The service in `app/` is the course starter (`cs454-midterm-starter`, copied from the course exercises repository at commit `8c572c1`), with only an additive `/health` readiness-file toggle for the CS 554 experiment. It is dependency-free and needs Node.js 22 or newer; the Dockerfile remains unchanged.
 
 ```bash
-# From the repository root: configuration, counter, health, and readiness tests.
-npm --prefix app test
+# From the checkout root: configuration, counter, health, and readiness tests.
+docker run --rm -v "$PWD/app:/app:ro" -w /app node:22-alpine npm test
 docker build -t cs554-midterm:1.1 app
 ```
+
+Node/npm need not be installed in the VM; the test container provides Node 22. Expected summary: 2 tests, 2 pass, 0 fail.
 
 - Configuration is read from environment variables at run time: `PORT` (default `8080`), `SERVICE_NAME` (default `cs454-midterm`), `MESSAGE` (default `Hello from the mini-project!`). The image bakes none of them in; Compose and Kubernetes supply them.
 - `GET /` returns `{service, message, hostname, requestCount}`; `GET /health` normally returns `{"status":"ok"}` with HTTP 200; anything else is 404. With `READINESS_FILE` set, the missing-file case instead returns HTTP 503 and `{"status":"not-ready"}`.
@@ -82,10 +102,10 @@ docker build -t cs554-midterm:1.1 app
 
 ### Start, status, and logs
 
-Run inside the VM, from the public checkout at `/home/student/CS-554-MidTerm`. The image is built from the unchanged `app/Dockerfile`; Kubernetes uses the same `cs554-midterm:1.1`. The earlier Part 2 capture used `1.0`; `evidence/04-readiness-554.md` records the upgrade and successful Compose requests with `READINESS_FILE` unset.
+Run inside the VM, from the public checkout root. The image is built from the unchanged `app/Dockerfile`; Kubernetes uses the same `cs554-midterm:1.1`. The earlier Part 2 capture used `1.0`; `evidence/04-readiness-554.md` records the upgrade and successful Compose requests with `READINESS_FILE` unset.
 
 ```bash
-cd /home/student/CS-554-MidTerm
+cd "$checkout_root"
 docker build -t cs554-midterm:1.1 app
 docker image ls cs554-midterm
 cd compose
@@ -143,7 +163,9 @@ docker compose down
 docker compose ps
 ```
 
-This removed the service container and Compose network; `ps` showed no service. The local image and ignored `.env` remain. For the walkthrough, the service was subsequently brought back up and left healthy:
+This removed the service container and Compose network; `ps` showed no service. The local image and ignored `.env` remain. For the walkthrough, the service was subsequently brought back up and left healthy.
+
+**Optional: retain for the walkthrough; skip for final teardown.**
 
 ```bash
 docker compose up -d
@@ -157,9 +179,10 @@ The complete build, configuration, requests, logs, restart, cleanup, and final s
 
 ### Making the image available to the cluster
 
-Run inside the VM from `/home/student/CS-554-MidTerm`. The cluster runs in k3d containers inside `cs554-vm`, which itself runs in VMware Workstation on the Windows host. Compose can remain running on VM port 8080.
+Run inside the VM from the checkout root. The cluster runs in k3d containers inside `cs554-vm`, which itself runs in VMware Workstation on the Windows host. Compose can remain running on VM port 8080.
 
 ```bash
+cd "$checkout_root"
 bash scripts/vm-tls-probe.sh
 k3d cluster create cs554 --image rancher/k3s:v1.37.1-k3s1 --servers 1 --agents 0
 kubectl cluster-info
@@ -190,6 +213,8 @@ The resources use namespace `default`. The Deployment has two replicas labeled `
 ```bash
 kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6; do curl -s http://cs554-midterm/; echo; done'
 ```
+
+This is a short random sample, not a distribution guarantee; one hostname in a short sample, especially right after a change, is not a failure.
 
 This exercises Service DNS, ClusterIP routing, and selection of ready backends. Both application Pod hostnames answered, with independent counters. It demonstrates requests reaching multiple backends, not strict round-robin ordering or a fairness guarantee.
 
@@ -234,7 +259,9 @@ kubectl delete -f k8s/client-pod.yaml -f k8s/service.yaml -f k8s/deployment.yaml
 kubectl get all
 ```
 
-Only the default `kubernetes` Service remained after application cleanup; the k3d cluster and Compose service were not deleted. The three manifests were subsequently reapplied with the deploy commands above. The selector and readiness experiments are complete and all temporary changes were restored; the correct Service, two ready replicas, and client Pod remain running.
+Only the default `kubernetes` Service remained after application cleanup; the k3d cluster and Compose service were not deleted.
+
+**Optional: retain for the walkthrough; skip for final teardown.** Reapply the three manifests with the deploy commands above. They were subsequently reapplied in the recorded run. The selector and readiness experiments are complete and all temporary changes were restored; the correct Service, two ready replicas, and client Pod remain running.
 
 ## Part 4 — Controlled troubleshooting
 
@@ -255,7 +282,7 @@ Verify a fresh `kubectl port-forward svc/cs554-midterm 18080:80` also serves `cu
 ```bash
 diff -u k8s/service.yaml k8s/service-broken.yaml
 # diff exit 1 is expected: only the app selector differs.
-date --iso-8601=seconds > /home/student/cs554-issue5-failure-start.txt
+date --iso-8601=seconds > "$HOME/cs554-issue5-failure-start.txt"
 kubectl apply -f k8s/service-broken.yaml
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
 ```
@@ -267,14 +294,14 @@ for i in 1 2 3; do
     kubectl exec client -- curl -sS --max-time 5 http://cs554-midterm/
     echo "exit=$?"
 done
-kubectl port-forward --pod-running-timeout=5s svc/cs554-midterm 18080:80 > /home/student/cs554-issue5-broken-forward.log 2>&1 &
+kubectl port-forward --pod-running-timeout=5s svc/cs554-midterm 18080:80 > "$HOME/cs554-issue5-broken-forward.log" 2>&1 &
 forward_pid=$!
 sleep 6
 curl -sS --max-time 5 http://127.0.0.1:18080/
 echo "curl exit=$?"
 wait "$forward_pid"
 echo "port-forward exit=$?"
-cat /home/student/cs554-issue5-broken-forward.log
+cat "$HOME/cs554-issue5-broken-forward.log"
 ```
 
 The fresh forwarder terminated with exit 1 and `error: timed out waiting for the condition`; both client paths failed with curl exit 7. The in-cluster request depends on Service DNS and ClusterIP routing. Port-forward must select a matching Pod anew; an old session would remain pinned and could hide the broken selector. No forwarder remains running after these captures.
@@ -287,7 +314,7 @@ kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
 kubectl describe svc cs554-midterm | grep Endpoints
 kubectl get deploy cs554-midterm
 kubectl logs deploy/cs554-midterm --since=2m
-failure_start=$(cat /home/student/cs554-issue5-failure-start.txt)
+failure_start=$(cat "$HOME/cs554-issue5-failure-start.txt")
 kubectl logs -l app=cs554-midterm --since-time="$failure_start" --timestamps --prefix --tail=-1
 ```
 
@@ -299,6 +326,12 @@ The mismatch made the EndpointSlice controller select no backends, leaving the S
 
 ```bash
 kubectl apply -f k8s/service.yaml
+for attempt in $(seq 1 20); do
+    count=$(kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o json | jq '[.items[].endpoints[]? | select(.conditions.ready == true)] | length')
+    if test "$count" -eq 2; then break; fi
+    sleep 1
+done
+test "$count" -eq 2 || { echo 'Two ready endpoints did not return'; exit 1; }
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector}'
 kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o wide
 kubectl describe svc cs554-midterm | grep -E 'Selector|Endpoints'
@@ -345,6 +378,16 @@ kubectl exec <pod-A> -- ls -l /tmp/ready
 kubectl exec <pod-A> -- wget -qO- http://127.0.0.1:8080/
 ```
 
+Record your own baseline direct count N: expect N+1 during failure and N+2 after recovery, before new Service traffic. Generation starts at 1 on a fresh deploy and must remain unchanged during this experiment. Names, UIDs, start times, addresses, and absolute counts are run-specific; the evidence's generation 2 and counts 4/5/6 describe the recorded run.
+
+Optional continuity snapshots, taken before changing readiness:
+
+```bash
+mkdir -p .qualification
+kubectl get pods -l app=cs554-midterm -o json | jq -S '[.items[] | {name:.metadata.name,uid:.metadata.uid,containerID:.status.containerStatuses[0].containerID,restarts:.status.containerStatuses[0].restartCount,startedAt:.status.containerStatuses[0].state.running.startedAt}] | sort_by(.name)' > .qualification/pods-before.json
+kubectl get deploy cs554-midterm -o json | jq -S '{uid:.metadata.uid,generation:.metadata.generation,spec:.spec}' > .qualification/deploy-before.json
+```
+
 ### One running replica becomes NotReady
 
 ```bash
@@ -375,7 +418,31 @@ kubectl exec client -- sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do curl -sS --max-t
 kubectl get deploy cs554-midterm -o jsonpath='{.metadata.generation}'
 ```
 
+This is a short random sample, not a distribution guarantee; one hostname in a short sample, especially right after a change, is not a failure.
+
 A recovered within one probe period, both endpoints became ready, and Service requests again reached both hostnames. A's next direct request counted 6: readiness had not restarted the process or reset its state. Pod names, UIDs, container IDs, start times, and zero restarts matched the baseline; Deployment generation stayed 2 and its template was identical throughout. Every temporary change was restored by recreating the file. Both environments remain running on image `1.1`; complete captures and the unchanged probe/resource excerpt are in `evidence/04-readiness-554.md`.
+
+Optional: repeat the continuity snapshots after recovery. Both `cmp` commands exit 0 when the recorded Pod identities and Deployment generation/spec are unchanged:
+
+```bash
+kubectl get pods -l app=cs554-midterm -o json | jq -S '[.items[] | {name:.metadata.name,uid:.metadata.uid,containerID:.status.containerStatuses[0].containerID,restarts:.status.containerStatuses[0].restartCount,startedAt:.status.containerStatuses[0].state.running.startedAt}] | sort_by(.name)' > .qualification/pods-after.json
+kubectl get deploy cs554-midterm -o json | jq -S '{uid:.metadata.uid,generation:.metadata.generation,spec:.spec}' > .qualification/deploy-after.json
+cmp .qualification/pods-before.json .qualification/pods-after.json
+cmp .qualification/deploy-before.json .qualification/deploy-after.json
+```
+
+## Full teardown
+
+From the checkout root, after the walkthrough is recorded:
+
+```bash
+kubectl delete -f k8s/client-pod.yaml -f k8s/service.yaml -f k8s/deployment.yaml
+docker compose -f compose/compose.yaml down
+k3d cluster delete cs554
+docker rmi cs554-midterm:1.1
+```
+
+The ignored `compose/.env` and the checkout remain; remove only what you created; do not prune anything else on the VM.
 
 ## Report (LaTeX)
 
