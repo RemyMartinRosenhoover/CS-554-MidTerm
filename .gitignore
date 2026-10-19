@@ -35,6 +35,7 @@ kubeconfig*
 *.vmss
 
 # Editor and OS noise
+.qualification/
 .vscode/
 .idea/
 .DS_Store
