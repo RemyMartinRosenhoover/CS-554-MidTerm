@@ -10,3 +10,7 @@
 *.synctex.gz
 *.toc
 main.pdf
+
+# The submitted report and the demonstration guide are committed as PDFs.
+!main.pdf
+!recording-runbook.pdf

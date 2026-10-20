@@ -1,11 +1,9 @@
 # CS 454/554 Midterm Mini-Project — One Service, Two Deployment Environments
 
-> **Complete except the walkthrough video link.**
-
 One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux virtual machine, and a local Kubernetes cluster running two replicas. The project records how each environment manages the service, investigates a deliberately broken Service selector, runs a readiness experiment (CS 554), and explains how the same workload would be deployed on OpenStack.
 
 **Course:** CS 454/554 — Introduction to Cloud Computing, Fall 2026
-**Walkthrough video (3–5 min):** TODO — link
+**Walkthrough video (3–5 min):** `walkthrough.mp4`, submitted as a file with the Canvas upload alongside this repository's contents (no streaming link is used).
 **Demonstration guide:** [Walkthrough Demonstration Guide](docs/report/recording-runbook.pdf) (preconditions, the command entered at each step, the result expected, verification, and restoration; source [`docs/report/recording-runbook.tex`](docs/report/recording-runbook.tex)), with the rehearsed [shot list](docs/video-shotlist.md). It is also a step-by-step way to reproduce the demonstration on an environment built from this README.
 
 ## Repository layout
@@ -479,12 +477,12 @@ cd docs/report
 latexmk -pdf main.tex
 ```
 
-CI compiles the report on every push and pull request and publishes the PDF as the `report-pdf` workflow artifact. Open [Actions](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions), select the latest successful `ci` run, and download `report-pdf` under Artifacts. `docs/report/main.pdf` is committed at submission time; until then use the CI artifact. The editable diagram source is [docs/diagram.svg](docs/diagram.svg).
+CI compiles the report on every push and pull request and publishes the PDF as the `report-pdf` workflow artifact. Open [Actions](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions), select the latest successful `ci` run, and download `report-pdf` under Artifacts. The committed [docs/report/main.pdf](docs/report/main.pdf) is the submitted report, compiled from the final source; the CI artifact is the same document rebuilt on every push. The editable diagram source is [docs/diagram.svg](docs/diagram.svg).
 
 ## Report and evidence
 
 - [Report source](docs/report/main.tex): LaTeX source for the deployment analysis, diagram, OpenStack plan, and CS 554 interpretation.
-- [Compiled report](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions): latest successful `ci` run, then Artifacts, then `report-pdf`.
+- [Compiled report](docs/report/main.pdf): the submitted PDF; CI also rebuilds it on every push as the `report-pdf` artifact under [Actions](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions).
 - [Deployment diagram](docs/diagram.svg): host, VM, Compose container, k3d cluster, and request paths with addresses and ports.
 - [Walkthrough Demonstration Guide](docs/report/recording-runbook.pdf): the procedure behind the recorded walkthrough, usable to reproduce the demonstration step by step (source `docs/report/recording-runbook.tex`).
 - [References](docs/references.md): numbered source list mirrored from the report's BibTeX bibliography.
