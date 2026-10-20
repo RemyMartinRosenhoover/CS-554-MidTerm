@@ -21,3 +21,4 @@ The source of truth is [the report bibliography](report/references.bib). This li
 17. OpenStack Foundation. [Security groups (Networking Guide)](https://docs.openstack.org/neutron/latest/admin/intro-os-networking.html#security-groups). Accessed 18 October 2026.
 18. OpenStack Foundation. [Floating IP addresses (Networking Guide)](https://docs.openstack.org/neutron/latest/admin/intro-os-networking.html#floating-ip-addresses). Accessed 18 October 2026.
 19. The Kubernetes Authors. [Virtual IPs and Service Proxies](https://kubernetes.io/docs/reference/networking/virtual-ips/). Kubernetes documentation; accessed 19 October 2026.
+20. UAH Computer Science. [Optional: Build Your Own OpenStack Lab with DevStack (OPTIONAL-LOCAL-DEVSTACK.md)](https://github.com/UAH-Computer-Science/cs454-Course-Exercises/blob/main/exercise-05-openstack-iaas/OPTIONAL-LOCAL-DEVSTACK.md) (2026). Accessed 19 October 2026.
