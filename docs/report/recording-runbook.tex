@@ -61,7 +61,15 @@ Recovery attempt number & step 5, \code{recovered on attempt N} \\
 \end{tabular}
 \end{center}
 
-\paragraph{Windows.} The README open in a browser (steps 1 and 6); \emph{Terminal~1}, an SSH session at \code{\textasciitilde/CS-554-MidTerm/compose}; \emph{Terminal~2}, an SSH session at \code{\textasciitilde/CS-554-MidTerm}; one host PowerShell window.
+\paragraph{Windows.} The README open in a browser (steps 1 and 6); \emph{Terminal~1}, an SSH session at \code{\textasciitilde/CS-554-MidTerm/compose}; \emph{Terminal~2}, an SSH session at \code{\textasciitilde/CS-554-MidTerm}; one host PowerShell window. Only P1, P6, and the host request in step~2 run on the host; every other block runs inside the VM. Each SSH session is opened from its own PowerShell window with the README's connection line:
+\begin{verbatim}
+$work = Join-Path $env:USERPROFILE 'codex-work'
+$keys = Join-Path $work 'keys'
+$key = Join-Path $keys 'cs554_vm'
+$knownHosts = Join-Path $keys 'known_hosts'
+$ip = Get-Content -LiteralPath (Join-Path $work 'logs\cs554-vm-ip.txt')
+ssh -i $key -o "UserKnownHostsFile=$knownHosts" "student@$ip"
+\end{verbatim}
 
 \section{Preconditions}
 
