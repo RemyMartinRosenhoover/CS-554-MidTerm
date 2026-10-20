@@ -61,7 +61,7 @@ ssh -i $key -o "UserKnownHostsFile=$knownHosts" "student@$ip" 'sudo bash vm-prov
 Test-NetConnection $ip -Port 22
 ```
 
-The import phase refuses to overwrite an existing VM. Do not rerun creation/configuration phases against a running VM. This step installs tools only; no container image is pulled and no service or Kubernetes cluster is deployed.
+The import phase refuses to overwrite an existing VM. Do not rerun creation/configuration phases against a running VM. This step installs tools only; no container image is pulled and no service or Kubernetes cluster is deployed. The scripts are one reproducible way to build the VM; any Ubuntu 24.04 VM with Docker Engine, the Compose plugin, kubectl, and k3d installed, reachable from the host over SSH, works for everything that follows.
 
 Inside the VM, clone into the home directory:
 
@@ -90,7 +90,7 @@ docker run --rm -v "$PWD/app:/app:ro" -w /app node:22-alpine npm test
 docker build -t cs554-midterm:1.1 app
 ```
 
-Node/npm need not be installed in the VM; the test container provides Node 22. Expected summary: 2 tests, 2 pass, 0 fail.
+Node/npm need not be installed in the VM; the test container provides Node 22. Expected summary: 2 tests, 2 pass, 0 fail. The suite requires Node 22 or newer (`engines` in `app/package.json`); on a host with an older Node the first test fails, so run it in the container as shown.
 
 - Configuration is read from environment variables at run time: `PORT` (default `8080`), `SERVICE_NAME` (default `cs454-midterm`), `MESSAGE` (default `Hello from the mini-project!`). The image bakes none of them in; Compose and Kubernetes supply them.
 - `GET /` returns `{service, message, hostname, requestCount}`; `GET /health` normally returns `{"status":"ok"}` with HTTP 200; anything else is 404. With `READINESS_FILE` set, the missing-file case instead returns HTTP 503 and `{"status":"not-ready"}`.
