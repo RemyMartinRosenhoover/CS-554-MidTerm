@@ -37,10 +37,10 @@ Guest: the Ubuntu noble server cloud OVA, verified against its published SHA256S
 
 If another cluster or Compose project already exists on the VM, use distinct names and a separate kubeconfig; the recipes assume a VM dedicated to this project.
 
-From the repository root, use these separate PowerShell phases. Keys, downloads, generated cloud-init, known-hosts and logs stay in a working folder outside the repository (the scripts default to `$env:USERPROFILE\codex-work`); never commit them.
+From the repository root, use these separate PowerShell phases. Keys, downloads, generated cloud-init, known-hosts and logs stay in a working folder outside the repository (the scripts default to `$env:USERPROFILE\cs554-work`); never commit them.
 
 ```powershell
-$work = Join-Path $env:USERPROFILE 'codex-work'
+$work = Join-Path $env:USERPROFILE 'cs554-work'
 $keys = Join-Path $work 'keys'
 New-Item -ItemType Directory -Path $keys -Force | Out-Null
 $key = Join-Path $keys 'cs554_vm'
@@ -137,7 +137,7 @@ The first three responses reported counts 1, 2, and 3 with service `cs554-compos
 VMware NAT on VMnet8: the Windows host reaches the guest directly, without port forwarding. Docker's published port connects VM port 8080 to the application in the container. `$ip` is your VM's address, written by the Start phase; the recorded run's guest was `192.168.197.134`.
 
 ```powershell
-$ip = (Get-Content -LiteralPath (Join-Path $env:USERPROFILE 'codex-work\logs\cs554-vm-ip.txt') -Raw).Trim()
+$ip = (Get-Content -LiteralPath (Join-Path $env:USERPROFILE 'cs554-work\logs\cs554-vm-ip.txt') -Raw).Trim()
 curl.exe -s "http://${ip}:8080/"
 curl.exe -i "http://${ip}:8080/health"
 ```
@@ -499,6 +499,6 @@ CI compiles the report on every push and pull request and publishes the PDF as t
 
 No interactive Ubuntu installation was needed; cloud-init used `DataSourceVMware [seed=guestinfo]` and completed successfully. The first import produced virtual hardware version 99, which Workstation rejected before boot. With the VM powered off, it was corrected to 21; the recipe now supplies `--maxVirtualHardwareVersion=21` to reproduce the correction.
 
-The imported serial device was initially disconnected. It was connected using `vmrun connectNamedDevice ... serial0`; the recipe now sets `serial0.startConnected = "TRUE"`. Serial output goes to `$env:USERPROFILE\codex-work\logs\cs554-vm-serial.log`. Early first-boot messages were recovered from `/var/log/cloud-init-output.log` because the serial log did not capture that period; those messages are not serial-console evidence. For startup troubleshooting, inspect the new VM's `vmware.log`, the serial log and `cloud-init status --long` without changing host settings.
+The imported serial device was initially disconnected. It was connected using `vmrun connectNamedDevice ... serial0`; the recipe now sets `serial0.startConnected = "TRUE"`. Serial output goes to `$env:USERPROFILE\cs554-work\logs\cs554-vm-serial.log`. Early first-boot messages were recovered from `/var/log/cloud-init-output.log` because the serial log did not capture that period; those messages are not serial-console evidence. For startup troubleshooting, inspect the new VM's `vmware.log`, the serial log and `cloud-init status --long` without changing host settings.
 
 All seven in-VM TLS endpoints validated with public CA issuers before provisioning; no extra root certificate was needed. Recheck TLS on a different network before downloads. If validation fails, stop for the appropriate approved trust configuration; never disable certificate verification. No guest VM fallback route, host software install, or host configuration change was required.

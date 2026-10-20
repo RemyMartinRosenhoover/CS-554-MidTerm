@@ -1,8 +1,8 @@
 param(
     [ValidateSet('Download', 'Import', 'Grow', 'Configure', 'Start')]
     [string]$Phase = 'Download',
-    [string]$WorkFolder = (Join-Path $env:USERPROFILE 'codex-work'),
-    [string]$KeyPath = (Join-Path $env:USERPROFILE 'codex-work\keys\cs554_vm'),
+    [string]$WorkFolder = (Join-Path $env:USERPROFILE 'cs554-work'),
+    [string]$KeyPath = (Join-Path $env:USERPROFILE 'cs554-work\keys\cs554_vm'),
     [string]$VmFolder = 'C:\VMs\cs554-vm',
     [ValidateSet('GuestInfo', 'OvfProperties')]
     [string]$Route = 'GuestInfo',
@@ -129,7 +129,7 @@ switch ($Phase) {
             $newLines += $key + ' = ' + [char]34 + $settings[$key] + [char]34
         }
         [System.IO.File]::WriteAllLines($vmxPath, $newLines, $utf8)
-        Write-Record 'VMX configured: cs554-vm, 2 vCPU, 4096 MiB, NAT/vmxnet3; generated cloud-init and serial log under codex-work.'
+        Write-Record 'VMX configured: cs554-vm, 2 vCPU, 4096 MiB, NAT/vmxnet3; generated cloud-init and serial log under cs554-work.'
     }
     'Start' {
         Invoke-Tool (Join-Path $vmware 'vmrun.exe') @('-T', 'ws', 'start', $vmxPath, 'nogui')
