@@ -4,6 +4,7 @@
 
 \documentclass[11pt,letterpaper]{article}
 \usepackage[margin=0.75in]{geometry}
+\usepackage{cmap}% ToUnicode maps: text copied from the PDF is the text that was typeset
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[expansion=false]{microtype}
@@ -19,18 +20,26 @@
 \colorlet{shadecolor}{talkbg}
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\talk}[1]{\begin{shaded*}\noindent\textbf{Talking points.} #1\end{shaded*}}
-\newcommand{\enter}[1]{\cmdblock\par\noindent\textbf{Enter} (#1):\par}
-\newcommand{\observed}{\outblock\par\noindent\textbf{Observed in rehearsal:}\par}
+\newcommand{\enter}[1]{\par\noindent\textbf{Enter} (#1):\par}
+\newcommand{\observed}{\par\noindent\textbf{Observed in rehearsal:}\par}
 \newcommand{\checkpoint}[1]{\par\noindent\textbf{Check before continuing.} #1\par}
 \newcommand{\stoprule}[1]{\par\noindent\textbf{Stop rule.} #1\par}
 \setlength{\parskip}{4pt}
 \emergencystretch=3em
-% Commands at 8pt; observed output at 7pt so unedited terminal lines fit the text width.
-\makeatletter
-\newcommand{\cmdblock}{\def\verbatim@font{\fontsize{8}{9.5}\selectfont\ttfamily}}
-\newcommand{\outblock}{\def\verbatim@font{\fontsize{7}{8.5}\selectfont\ttfamily}}
-\makeatother
-\cmdblock
+% Command and output blocks are listings, not verbatim: straight quotes (upquote), natural
+% spacing (fullflexible) and kept indentation, so a block selected in the PDF pastes back exactly.
+\usepackage{upquote}
+\usepackage{listings}
+\definecolor{cmdbg}{RGB}{245,245,245}
+\definecolor{cmdrule}{RGB}{120,120,120}
+\lstset{basicstyle=\fontsize{8}{9.6}\selectfont\ttfamily,columns=fullflexible,keepspaces=true,
+  breaklines=false,upquote=true,showstringspaces=false,extendedchars=true,
+  xleftmargin=6pt,xrightmargin=6pt,framexleftmargin=4pt,aboveskip=5pt,belowskip=7pt,
+  literate={…}{{\ldots}}1}
+% cmd: what is typed. Shaded, framed; copy the block and paste it as it stands.
+\lstnewenvironment{cmd}{\lstset{backgroundcolor=\color{cmdbg},frame=single,rulecolor=\color{cmdrule}}}{}
+% out: what the terminal showed. Smaller, a left rule only, no shading.
+\lstnewenvironment{out}{\lstset{basicstyle=\fontsize{7}{8.4}\selectfont\ttfamily,frame=l,rulecolor=\color{cmdrule}}}{}
 
 \title{Walkthrough Demonstration Guide\\
 \large Procedure, expected results, and verification for the recorded walkthrough}
@@ -46,7 +55,7 @@ This is the procedure I follow to record the four-minute walkthrough, and it is 
 
 The guide assumes the environment the README describes, built and deployed as far as Part~3: the VM is running, the Compose service is up on port 8080, and the k3d cluster holds the two-replica Deployment, its Service, and the client Pod. It demonstrates what Parts~2--4 of the README establish; it does not repeat the CS~554 readiness experiment, which is documented in the README's CS~554 section and in \code{evidence/04-readiness-554.md}.
 
-\paragraph{Conventions.} Commands marked \emph{VM} are entered in an SSH session inside \code{cs554-vm}; commands marked \emph{host} are entered in Windows PowerShell on the machine that runs VMware. Blocks are pasted as shown, without prompt characters. Some values are live and will differ from the rehearsal; I read them from the screen rather than from this page:
+\paragraph{Conventions.} Commands marked \emph{VM} are entered in an SSH session inside \code{cs554-vm}; commands marked \emph{host} are entered in Windows PowerShell on the machine that runs VMware. Command blocks are shaded and framed; selecting one in the PDF and pasting it reproduces the text exactly, including quotes and indentation, with no prompt characters to strip. Output blocks carry a rule on the left only. Some values are live and will differ from the rehearsal; I read them from the screen rather than from this page:
 
 \begin{center}\small
 \begin{tabular}{@{}ll@{}}
@@ -62,44 +71,44 @@ Recovery attempt number & step 5, \code{recovered on attempt N} \\
 \end{center}
 
 \paragraph{Windows.} The README open in a browser (steps 1 and 6); \emph{Terminal~1}, an SSH session at \code{\textasciitilde/CS-554-MidTerm/compose}; \emph{Terminal~2}, an SSH session at \code{\textasciitilde/CS-554-MidTerm}; one host PowerShell window. Only P1, P6, and the host request in step~2 run on the host; every other block runs inside the VM. Each SSH session is opened from its own PowerShell window with the README's connection line:
-\begin{verbatim}
+\begin{cmd}
 $work = Join-Path $env:USERPROFILE 'cs554-work'
 $keys = Join-Path $work 'keys'
 $key = Join-Path $keys 'cs554_vm'
 $knownHosts = Join-Path $keys 'known_hosts'
 $ip = Get-Content -LiteralPath (Join-Path $work 'logs\cs554-vm-ip.txt')
 ssh -i $key -o "UserKnownHostsFile=$knownHosts" "student@$ip"
-\end{verbatim}
+\end{cmd}
 
 \section{Preconditions}
 
 I run these checks in order and do not start until all seven pass. A failure is corrected with the restoration steps in Section~4, after which the checks are run again from P1.
 
 \paragraph{P1 --- The VM is running and has an address} (host).
-\begin{verbatim}
+\begin{cmd}
 $vmrun = "${env:ProgramFiles(x86)}\VMware\VMware Workstation\vmrun.exe"
 & $vmrun -T ws list
 & $vmrun -T ws getGuestIPAddress C:\VMs\cs554-vm\cs554-vm.vmx
-\end{verbatim}
+\end{cmd}
 Expected: the list names \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the address is on \code{192.168.197.0/24}. I note the address; step 2 uses it.
 
 \paragraph{P2 --- The checkout is at the current \code{main}} (VM).
-\begin{verbatim}
+\begin{cmd}
 cd ~/CS-554-MidTerm
 git status --porcelain
 git fetch -q origin && git rev-parse --short HEAD origin/main
-\end{verbatim}
+\end{cmd}
 Expected: \code{git status} prints nothing, and the two hashes are identical. If they differ, \code{git pull --ff-only origin main} and repeat.
 
 \paragraph{P3 --- The Compose service is healthy} (VM).
-\begin{verbatim}
+\begin{cmd}
 docker inspect -f '{{.State.Health.Status}}' compose-web-1
 curl -s localhost:8080/health
-\end{verbatim}
+\end{cmd}
 Expected: \code{healthy}, then \code{\{"status":"ok"\}}.
 
 \paragraph{P4 --- The cluster is at its baseline} (VM).
-\begin{verbatim}
+\begin{cmd}
 kubectl get deploy cs554-midterm
 kubectl get pods -l app=cs554-midterm
 kubectl get pod client
@@ -109,20 +118,20 @@ kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o json \
 for p in $(kubectl get pods -l app=cs554-midterm -o name); do
     kubectl exec "$p" -- test -f /tmp/ready && echo "$p readiness file present"
 done
-\end{verbatim}
+\end{cmd}
 Expected: Deployment \code{2/2}; two application Pods \code{1/1 Running} with \code{RESTARTS 0}; \code{client} \code{Running}; selector \code{cs554-midterm} (not \code{cs554-midterm-typo}); ready endpoints \code{2}; both Pods report the readiness file.
 
 \paragraph{P5 --- No forwarder is left over} (VM).
-\begin{verbatim}
+\begin{cmd}
 pgrep -af 'kubectl.*port[-]forward' || echo "no forwarder"
 ss -ltn '( sport = :18080 )'
-\end{verbatim}
+\end{cmd}
 Expected: \code{no forwarder}, and the \code{ss} table contains only its header line.
 
 \paragraph{P6 --- The host reaches the service} (host, with the address from P1).
-\begin{verbatim}
+\begin{cmd}
 curl.exe -i http://<address>:8080/health
-\end{verbatim}
+\end{cmd}
 Expected: \code{HTTP/1.1 200 OK} with body \code{\{"status":"ok"\}}.
 
 \paragraph{P7 --- The recording setup is ready.} The four windows are arranged inside the capture region with a readable font; nothing personal is visible (no taskbar, notifications, other tabs, or host paths); a five-second test clip has been recorded and played back with audible audio.
@@ -139,24 +148,24 @@ Screen: the README in the browser, scrolled to the repository layout and the env
 Purpose: show the service running under Compose, reached from inside the VM and from the host, with its per-process counter.
 
 \enter{VM, Terminal 1}
-\begin{verbatim}
+\begin{cmd}
 cd ~/CS-554-MidTerm/compose
 docker compose ps
 curl -s localhost:8080/
 curl -s localhost:8080/
-\end{verbatim}
+\end{cmd}
 \enter{host, with the address from P1}
-\begin{verbatim}
+\begin{cmd}
 curl.exe -s http://<address>:8080/
-\end{verbatim}
+\end{cmd}
 \observed
-\begin{verbatim}
+\begin{out}
 NAME            IMAGE               COMMAND                  SERVICE   STATUS                  PORTS
 compose-web-1   cs554-midterm:1.1   "docker-entrypoint.s…"   web       Up 20 hours (healthy)   0.0.0.0:8080->8080/tcp, ...
 {"service":"cs554-compose","message":"Hello from Compose inside the VM","hostname":"9577b9f64fc0","requestCount":2}
 {"service":"cs554-compose","message":"Hello from Compose inside the VM","hostname":"9577b9f64fc0","requestCount":3}
 {"service":"cs554-compose","message":"Hello from Compose inside the VM","hostname":"9577b9f64fc0","requestCount":4}
-\end{verbatim}
+\end{out}
 The third response came from the host. The service's JSON has no trailing newline, so consecutive responses run together on one line in the terminal; they are separated here for readability, and the \code{ps} output is trimmed to the columns that matter.
 \talk{The Windows host reaches the VM's NAT address directly; no port forwarding is configured. The hostname stays the same and the count rises by one with every request, because this counter belongs to that one application process.}
 \checkpoint{the host's count is exactly one more than the VM's last. If \code{curl.exe} cannot connect, the guest address has changed: confirm it with P1 and repeat the host line.}
@@ -165,13 +174,13 @@ The third response came from the host. The service's JSON has no trailing newlin
 Purpose: show the same image running as two replicas behind a Service, with requests reaching both.
 
 \enter{VM, Terminal 2}
-\begin{verbatim}
+\begin{cmd}
 cd ~/CS-554-MidTerm
 kubectl get deploy,pods,svc
 kubectl exec client -- sh -c 'for i in 1 2 3 4; do curl -s http://cs554-midterm/; echo; done'
-\end{verbatim}
+\end{cmd}
 \observed
-\begin{verbatim}
+\begin{out}
 NAME                            READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/cs554-midterm   2/2     2            2           22h
 
@@ -187,7 +196,7 @@ service/kubernetes      ClusterIP   10.43.0.1       <none>        443/TCP   23h
 {"service":"cs554-k8s","message":"Hello from Kubernetes inside the VM","hostname":"cs554-midterm-67c66d7b5d-l2ffr","requestCount":46}
 {"service":"cs554-k8s","message":"Hello from Kubernetes inside the VM","hostname":"cs554-midterm-67c66d7b5d-98k98","requestCount":30}
 {"service":"cs554-k8s","message":"Hello from Kubernetes inside the VM","hostname":"cs554-midterm-67c66d7b5d-l2ffr","requestCount":47}
-\end{verbatim}
+\end{out}
 The four responses name two different Pods with independent counters. A short sample can land on one Pod only; that is a property of random backend selection, not a fault, and I say so if it happens.
 \talk{Kubernetes uses the same image, imported with \code{k3d image import}, and keeps two ready replicas. These in-cluster requests go through Service DNS and ClusterIP routing; this sample reached both hostnames with independent counters, which demonstrates multiple backends, not round-robin ordering.}
 \checkpoint{all four requests returned JSON and none printed a \code{curl:} error.}
@@ -196,18 +205,18 @@ The four responses name two different Pods with independent counters. A short sa
 Purpose: delete one Pod and show the ReplicaSet restoring the declared count without any further apply.
 
 \enter{VM, Terminal 2; the first block selects a live Pod and watches, the second runs after \code{Ctrl+C}}
-\begin{verbatim}
+\begin{cmd}
 pod_to_delete=$(kubectl get pods -l app=cs554-midterm -o jsonpath='{.items[0].metadata.name}')
 printf 'Selected Pod: %s\n' "$pod_to_delete"
 kubectl delete pod "$pod_to_delete" --wait=false
 kubectl get pods -w
-\end{verbatim}
-\begin{verbatim}
+\end{cmd}
+\begin{cmd}
 kubectl rollout status deploy/cs554-midterm --timeout=120s
 kubectl get pods
-\end{verbatim}
+\end{cmd}
 \observed
-\begin{verbatim}
+\begin{out}
 Selected Pod: cs554-midterm-67c66d7b5d-98k98
 pod "cs554-midterm-67c66d7b5d-98k98" deleted from default namespace
 NAME                             READY   STATUS        RESTARTS   AGE
@@ -223,7 +232,7 @@ NAME                             READY   STATUS    RESTARTS   AGE
 client                           1/1     Running   0          22h
 cs554-midterm-67c66d7b5d-2v5mx   1/1     Running   0          10s
 cs554-midterm-67c66d7b5d-l2ffr   1/1     Running   0          19h
-\end{verbatim}
+\end{out}
 The replacement carries a new generated name and reached \code{1/1} seven seconds after the deletion; repeated \code{Completed} and \code{Pending} rows from the watch are omitted above.
 \talk{The ReplicaSet controller sees fewer Pods than the Deployment's desired two and creates a new Pod on its own. Compose's restart earlier reused the container and restarted the process; Kubernetes replaces the Pod instead. In both cases the new process starts with an empty counter.}
 \checkpoint{two application Pods \code{1/1} with zero restarts, one of them seconds old.}
@@ -233,7 +242,7 @@ The replacement carries a new generated name and reached \code{1/1} seven second
 Purpose: break the Service selector, show healthy Pods with no endpoints, restore it, and show recovery measured by a successful request. The restore block is the README's ``Restore and verify'' block, unchanged.
 
 \enter{VM, Terminal 2; failure group}
-\begin{verbatim}
+\begin{cmd}
 kubectl apply -f k8s/service-broken.yaml
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector.app}'; echo
 for attempt in $(seq 1 20); do
@@ -249,9 +258,9 @@ printf 'Expected failed request exit: %s\n' "$failure_exit"
 test "$failure_exit" -eq 7
 kubectl get pods
 kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm
-\end{verbatim}
+\end{cmd}
 \observed
-\begin{verbatim}
+\begin{out}
 service/cs554-midterm configured
 cs554-midterm-typo
 curl: (7) Failed to connect to cs554-midterm port 80 after 0 ms: Could not connect to server
@@ -263,10 +272,10 @@ cs554-midterm-67c66d7b5d-2v5mx   1/1     Running   0          114m
 cs554-midterm-67c66d7b5d-l2ffr   1/1     Running   0          21h
 NAME                  ADDRESSTYPE   PORTS     ENDPOINTS   AGE
 cs554-midterm-q55pw   IPv4          <unset>   <unset>     24h
-\end{verbatim}
+\end{out}
 
 \enter{VM, Terminal 2; restore group}
-\begin{verbatim}
+\begin{cmd}
 kubectl apply -f k8s/service.yaml
 for attempt in $(seq 1 20); do
     count=$(kubectl get endpointslices -l kubernetes.io/service-name=cs554-midterm -o json \
@@ -285,9 +294,9 @@ for attempt in $(seq 1 20); do
 done
 echo "recovered on attempt ${recovered:-none}"
 kubectl get pods -l app=cs554-midterm --show-labels
-\end{verbatim}
+\end{cmd}
 \observed
-\begin{verbatim}
+\begin{out}
 service/cs554-midterm configured
 {"app":"cs554-midterm"}
 NAME                  ADDRESSTYPE   PORTS   ENDPOINTS               AGE
@@ -301,7 +310,7 @@ recovered on attempt 2
 NAME                             READY   STATUS    RESTARTS   AGE    LABELS
 cs554-midterm-67c66d7b5d-2v5mx   1/1     Running   0          114m   app=cs554-midterm,pod-template-hash=67c66d7b5d,tier=web
 cs554-midterm-67c66d7b5d-l2ffr   1/1     Running   0          21h    app=cs554-midterm,pod-template-hash=67c66d7b5d,tier=web
-\end{verbatim}
+\end{out}
 In this rehearsal the EndpointSlice already listed both backends when the first request was made, and that request was still refused; the second succeeded. That is the behavior the retry exists for: the EndpointSlice is updated before the node's forwarding rules are, so a successful request, not a populated EndpointSlice, is the evidence of recovery.
 \talk{Healthy Pods alone do not prove the Service works. Its selector is a label query, and the typo leaves it with no matching endpoints, so the request is refused while both Pods are running. After the correction the endpoints return at once, but the node's forwarding rules follow a moment later; the request is retried until it succeeds, here on attempt N.}
 \checkpoint{the JSON response and \code{recovered on attempt N} are on screen with a number, and both Pods carry \code{app=cs554-midterm}.}
@@ -312,15 +321,14 @@ Screen: the README's ``Report and evidence'' section. No command.
 \talk{The deployment and the experiments are captured in the evidence files, and the technical report explains the comparison and the OpenStack plan. The separate CS~554 readiness experiment is in \code{evidence/04-readiness-554.md} and section~6 of the report; it is not part of this on-camera demonstration.}
 
 \section{Restoration and verification}
-\cmdblock
 
 \subsection*{Restore after every run, finished or abandoned}
-\begin{verbatim}
+\begin{cmd}
 cd ~/CS-554-MidTerm
 kubectl apply -f k8s/service.yaml
 kubectl rollout status deploy/cs554-midterm --timeout=120s
 pkill -f 'kubectl.*port[-]forward' || true
-\end{verbatim}
+\end{cmd}
 Expected: \code{service/cs554-midterm unchanged} (or \code{configured}, if a run was abandoned during step~5), \code{successfully rolled out}, and no error from \code{pkill}.
 
 \subsection*{Verify the baseline}
@@ -328,12 +336,12 @@ Preconditions P3, P4, and P5 are run again and must pass exactly as before: a he
 
 \subsection*{Reset for another run (optional)}
 Nothing has to be reset: counters continue from where they are, and the talking points read the values on screen. If fresh counters are wanted, the following restarts the processes without changing a manifest or the Deployment:
-\begin{verbatim}
+\begin{cmd}
 cd ~/CS-554-MidTerm/compose && docker compose restart && cd ..
 docker compose -f compose/compose.yaml ps
 kubectl delete pod -l app=cs554-midterm
 kubectl rollout status deploy/cs554-midterm --timeout=120s
-\end{verbatim}
+\end{cmd}
 Expected: Compose back to \code{Up \ldots\ (healthy)} with its next request counting \code{1}; two new application Pods \code{1/1} with new names and empty counters. The full set of preconditions is run again before recording.
 
 \subsection*{Completion criteria}
