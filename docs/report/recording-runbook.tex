@@ -120,7 +120,7 @@ if ($ip -notmatch '^192\.168\.197\.(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[
 }
 $ip
 \end{cmd}
-Expected: the inventory lists \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the last line printed is the VM's address on \code{192.168.197.0/24}. If the inventory is empty, the VM is powered off: power it on in VMware Workstation (or \code{vmrun -T ws start} with the same \code{.vmx} and \code{nogui}), wait a minute for the guest to boot, and paste the block again. Never restart or reprovision a VM that is already running.
+Expected: the inventory lists \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the last line printed is the VM's address on \code{192.168.197.0/24}. If the inventory is empty, the VM is powered off: power it on in VMware Workstation (or \code{vmrun -T ws start} with the same \code{.vmx} and \code{nogui}), wait a minute for the guest to boot, and paste the block again; after a boot, expect P4 to report \code{RESTARTS 1} and use the reset block in Section~4 as P4 explains. Never restart or reprovision a VM that is already running.
 
 In Terminal 1 and Terminal 2 only, once the block has printed the address, connect:
 \begin{cmd}
@@ -171,6 +171,8 @@ for p in $(kubectl get pods -l app=cs554-midterm -o name); do
 done
 \end{cmd}
 Expected: Deployment \code{2/2}; two application Pods \code{1/1 Running} with \code{RESTARTS 0}; \code{client} \code{Running}; selector \code{cs554-midterm} (not \code{cs554-midterm-typo}); ready endpoints \code{2}; both Pods report the readiness file.
+
+If the VM has been restarted since the stack was deployed, both application Pods keep their names but show \code{RESTARTS 1}: the kubelet restarted their containers in place when the node came back. Restoration cannot clear that history, and the demonstration's "zero restarts" observations in steps 4 and 5 assume a zero baseline, so run the reset block in Section~4 (it replaces both Pods, which come back at \code{RESTARTS 0}) and repeat P3 and P4.
 
 \paragraph{P5 --- No forwarder is left over} (Terminal 2).
 \begin{cmd}
@@ -388,7 +390,7 @@ Expected: \code{service/cs554-midterm unchanged} (or \code{configured}, if a run
 Preconditions P3, P4, and P5 are run again and must pass exactly as before: a healthy Compose service; \code{2/2}; two Pods \code{1/1} with zero restarts; selector \code{cs554-midterm}; two ready endpoints; both readiness files; no forwarder. The Pod names differ from before step~4; that is expected.
 
 \subsection*{Reset for another run (optional)}
-Nothing has to be reset: counters continue from where they are, and the talking points read the values on screen. If fresh counters are wanted, the following restarts the processes without changing a manifest or the Deployment:
+Nothing has to be reset between takes: counters continue from where they are, and the talking points read the values on screen. The block below is needed in two cases: fresh counters are wanted, or the VM was restarted and P4 shows \code{RESTARTS 1}. It restarts the Compose process and replaces both application Pods without changing a manifest or the Deployment:
 \begin{cmd}
 cd ~/CS-554-MidTerm/compose && docker compose restart && cd ..
 docker compose -f compose/compose.yaml ps
