@@ -72,7 +72,7 @@ Recovery attempt number & step 5, \code{recovered on attempt N} \\
 
 \paragraph{Windows.} The README open in a browser (steps 1 and 6); \emph{Terminal~1}, an SSH session at \code{\textasciitilde/CS-554-MidTerm/compose}; \emph{Terminal~2}, an SSH session at \code{\textasciitilde/CS-554-MidTerm}; one host PowerShell window. Only P1, P6, and the host request in step~2 run on the host; every other block runs inside the VM. Each SSH session is opened from its own PowerShell window with the README's connection line:
 \begin{cmd}
-$work = Join-Path $env:USERPROFILE 'cs554-work'
+$work = Join-Path $env:USERPROFILE 'cs554-work'   # the working folder from the README's Prerequisites
 $keys = Join-Path $work 'keys'
 $key = Join-Path $keys 'cs554_vm'
 $knownHosts = Join-Path $keys 'known_hosts'
@@ -91,6 +91,13 @@ $vmrun = "${env:ProgramFiles(x86)}\VMware\VMware Workstation\vmrun.exe"
 & $vmrun -T ws getGuestIPAddress C:\VMs\cs554-vm\cs554-vm.vmx
 \end{cmd}
 Expected: the list names \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the address is on \code{192.168.197.0/24}. I note the address; step 2 uses it.
+
+If the list is empty, the VM is powered off (for instance after a host restart). Start it headless and wait for the address; Docker's restart policy brings the Compose service back, and the k3d node container restarts the cluster, so the stack returns on its own within a minute or two:
+\begin{cmd}
+& $vmrun -T ws start C:\VMs\cs554-vm\cs554-vm.vmx nogui
+& $vmrun -T ws getGuestIPAddress C:\VMs\cs554-vm\cs554-vm.vmx -wait
+\end{cmd}
+Then continue with P2; P3 and P4 confirm the services are back (Pod names and counters may have changed, which is expected).
 
 \paragraph{P2 --- The checkout is at the current \code{main}} (VM).
 \begin{cmd}
