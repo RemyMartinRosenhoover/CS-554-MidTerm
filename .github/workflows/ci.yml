@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Rule 1 from AGENTS.md, enforced: no images, archives, secrets, or dependency
+      # Enforced: no images, archives, secrets, or dependency
       # directories may be tracked anywhere in the repository.
       - name: Forbidden files gate
         shell: bash

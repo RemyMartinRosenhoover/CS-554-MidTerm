@@ -11,4 +11,4 @@ Concise, labeled terminal output and screenshots for every observation the assig
 | `04-readiness-554.md` | CS 554: resources, readiness probe, one replica NotReady, EndpointSlices, recovery |
 | `screenshots/` | Images referenced from the files above, named by file number and topic |
 
-Format rule (from `AGENTS.md`): heading, one line of context (host / VM / cluster, date and time), then a fenced block with the command on its own line and the unedited output. Scrub only the host's hostname and username.
+Format rule: heading, one line of context (host / VM / cluster, date and time), then a fenced block with the command on its own line and the unedited output. Scrub only the host's hostname and username.
