@@ -6,7 +6,7 @@ One small Node.js HTTP service, deployed two ways: Docker Compose inside a Linux
 
 **Course:** CS 454/554 — Introduction to Cloud Computing, Fall 2026
 **Walkthrough video (3–5 min):** TODO — link
-**Recording preparation:** [Verified shot list and staging checklist](docs/video-shotlist.md).
+**Demonstration guide:** [Walkthrough Demonstration Guide](docs/report/recording-runbook.pdf) (preconditions, the command entered at each step, the result expected, verification, and restoration; source [`docs/report/recording-runbook.tex`](docs/report/recording-runbook.tex)), with the rehearsed [shot list](docs/video-shotlist.md). It is also a step-by-step way to reproduce the demonstration on an environment built from this README.
 
 ## Repository layout
 
@@ -486,6 +486,7 @@ CI compiles the report on every push and pull request and publishes the PDF as t
 - [Report source](docs/report/main.tex): LaTeX source for the deployment analysis, diagram, OpenStack plan, and CS 554 interpretation.
 - [Compiled report](https://github.com/RemyMartinRosenhoover/CS-554-MidTerm/actions): latest successful `ci` run, then Artifacts, then `report-pdf`.
 - [Deployment diagram](docs/diagram.svg): host, VM, Compose container, k3d cluster, and request paths with addresses and ports.
+- [Walkthrough Demonstration Guide](docs/report/recording-runbook.pdf): the procedure behind the recorded walkthrough, usable to reproduce the demonstration step by step (source `docs/report/recording-runbook.tex`).
 - [References](docs/references.md): numbered source list mirrored from the report's BibTeX bibliography.
 - [Evidence index](evidence/README.md): capture format and file map.
 - [Host and VM](evidence/00-host-vm.md): VM configuration, tools, networking, reachability, and TLS verification.
