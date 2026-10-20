@@ -55,14 +55,14 @@ This is the procedure I follow to record the four-minute walkthrough, and it is 
 
 The guide assumes the environment the README describes, built and deployed as far as Part~3: the VM is running, the Compose service is up on port 8080, and the k3d cluster holds the two-replica Deployment, its Service, and the client Pod. It demonstrates what Parts~2--4 of the README establish; it does not repeat the CS~554 readiness experiment, which is documented in the README's CS~554 section and in \code{evidence/04-readiness-554.md}.
 
-\paragraph{Conventions.} Commands marked \emph{VM} are entered in an SSH session inside \code{cs554-vm}; commands marked \emph{host} are entered in Windows PowerShell on the machine that runs VMware. Command blocks are shaded and framed; selecting one in the PDF and pasting it reproduces the text exactly, including quotes and indentation, with no prompt characters to strip. Output blocks carry a rule on the left only. Some values are live and will differ from the rehearsal; I read them from the screen rather than from this page:
+\paragraph{Conventions.} Every block names the window it belongs in (the table below); Terminal 1 and Terminal 2 take Linux commands only after SSH has connected. Command blocks are shaded and framed; selecting one in the PDF and pasting it reproduces the text exactly, including quotes and indentation, with no prompt characters to strip. Output blocks carry a rule on the left only. Some values are live and will differ from the rehearsal; I read them from the screen rather than from this page:
 
 \begin{center}\small
 \begin{tabular}{@{}ll@{}}
 \toprule
 Live value & Where it appears \\
 \midrule
-Guest address (\code{192.168.197.x}) & step 2, host request; found in precondition P1 \\
+Guest address (\code{192.168.197.x}) & \code{\$ip}, read by the preparation block in each window \\
 Pod names (\code{cs554-midterm-<hash>-<id>}) & steps 3--5 \\
 Ages, request counters & every output; counters rise by one per request \\
 Recovery attempt number & step 5, \code{recovered on attempt N} \\
@@ -70,51 +70,95 @@ Recovery attempt number & step 5, \code{recovered on attempt N} \\
 \end{tabular}
 \end{center}
 
-\paragraph{Windows.} The README open in a browser (steps 1 and 6); \emph{Terminal~1}, an SSH session at \code{\textasciitilde/CS-554-MidTerm/compose}; \emph{Terminal~2}, an SSH session at \code{\textasciitilde/CS-554-MidTerm}; one host PowerShell window. Only P1, P6, and the host request in step~2 run on the host; every other block runs inside the VM. Each SSH session is opened from its own PowerShell window with the README's connection line:
+\paragraph{Windows.} Four windows, named the same way in every caption below. Three are Windows PowerShell windows; two of those become guest shells after SSH connects, and the third never leaves the host.
+
+\begin{center}\small
+\begin{tabular}{@{}p{1.4in}p{2.0in}p{3.2in}@{}}
+\toprule
+Window & Prompt & Runs \\
+\midrule
+Host PowerShell & Windows \code{PS >}; never SSH here & setup, P1, P6, the host request in step 2 \\
+Terminal 1 (Compose) & PowerShell, then guest \code{student@cs554-vm} & after SSH: \code{cd \textasciitilde/CS-554-MidTerm/compose}; P3; step 2 \\
+Terminal 2 (Kubernetes) & PowerShell, then guest \code{student@cs554-vm} & after SSH: \code{cd \textasciitilde/CS-554-MidTerm}; P2, P4, P5; steps 3--5; restoration \\
+Browser & the public README & steps 1 and 6 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Preparation (off camera)}
+
+Variables are local to each PowerShell window: setting \code{\$work} or \code{\$ip} in one window does nothing for another. The block below is self-contained and is pasted into all three PowerShell windows, in each one before anything else. It selects the working folder, checks that the key and known-hosts file from the README's Prerequisites exist, confirms the VM is running, and reads its current address; it stops with a message at the first thing that is missing, so nothing is attempted against an empty address or a missing key.
+
+\code{\$work} must be the folder that was used to prepare this VM. The README's default is \code{cs554-work}; if the VM was prepared from another folder, change that one line and nothing else. A missing file is a path problem, not a reason to create a new key or a new VM.
+
 \begin{cmd}
-$work = Join-Path $env:USERPROFILE 'cs554-work'   # the working folder from the README's Prerequisites
-$keys = Join-Path $work 'keys'
-$key = Join-Path $keys 'cs554_vm'
-$knownHosts = Join-Path $keys 'known_hosts'
-$ip = Get-Content -LiteralPath (Join-Path $work 'logs\cs554-vm-ip.txt')
-ssh -i $key -o "UserKnownHostsFile=$knownHosts" "student@$ip"
+$work = Join-Path $env:USERPROFILE 'cs554-work'   # the folder used in the README's Prerequisites
+$key = Join-Path $work 'keys\cs554_vm'
+$knownHosts = Join-Path $work 'keys\known_hosts'
+$vmrun = Join-Path ${env:ProgramFiles(x86)} 'VMware\VMware Workstation\vmrun.exe'
+$vmx = 'C:\VMs\cs554-vm\cs554-vm.vmx'
+
+if (-not (Test-Path -LiteralPath $work -PathType Container)) {
+    throw 'Select the existing work folder used to prepare this VM.'
+}
+if (-not (Test-Path -LiteralPath $key -PathType Leaf)) {
+    throw 'The project SSH key was not found. Check the work folder.'
+}
+if (-not (Test-Path -LiteralPath $knownHosts -PathType Leaf)) {
+    throw 'The known-hosts file was not found. Check the work folder.'
+}
+if (-not (Test-Path -LiteralPath $vmrun -PathType Leaf)) {
+    throw 'VMware vmrun was not found at the expected installation path.'
+}
+& $vmrun -T ws list
+if ($LASTEXITCODE -ne 0) { throw 'VMware inventory could not be read.' }
+$addressOutput = & $vmrun -T ws getGuestIPAddress $vmx 2>&1
+if ($LASTEXITCODE -ne 0) { throw ('VM address unavailable: ' + ($addressOutput -join ' ')) }
+$ip = ($addressOutput -join '').Trim()
+if ($ip -notmatch '^192\.168\.197\.(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$') {
+    throw 'A valid address on the documented VMnet8 subnet was not returned.'
+}
+$ip
+\end{cmd}
+Expected: the inventory lists \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the last line printed is the VM's address on \code{192.168.197.0/24}. If the inventory is empty, the VM is powered off: power it on in VMware Workstation (or \code{vmrun -T ws start} with the same \code{.vmx} and \code{nogui}), wait a minute for the guest to boot, and paste the block again. Never restart or reprovision a VM that is already running.
+
+In Terminal 1 and Terminal 2 only, once the block has printed the address, connect:
+\begin{cmd}
+ssh -i $key -o ('UserKnownHostsFile=' + $knownHosts) ('student@' + $ip)
+\end{cmd}
+The prompt changes to \code{student@cs554-vm}. From here on these two windows take Linux commands; paste a guest block only after that prompt is showing, never into the PowerShell prompt. Then, in Terminal 1:
+\begin{cmd}
+cd ~/CS-554-MidTerm/compose
+\end{cmd}
+and in Terminal 2:
+\begin{cmd}
+cd ~/CS-554-MidTerm
 \end{cmd}
 
 \section{Preconditions}
 
 I run these checks in order and do not start until all seven pass. A failure is corrected with the restoration steps in Section~4, after which the checks are run again from P1.
 
-\paragraph{P1 --- The VM is running and has an address} (host).
-\begin{cmd}
-$vmrun = "${env:ProgramFiles(x86)}\VMware\VMware Workstation\vmrun.exe"
-& $vmrun -T ws list
-& $vmrun -T ws getGuestIPAddress C:\VMs\cs554-vm\cs554-vm.vmx
-\end{cmd}
-Expected: the list names \code{C:\textbackslash VMs\textbackslash cs554-vm\textbackslash cs554-vm.vmx}, and the address is on \code{192.168.197.0/24}. I note the address; step 2 uses it.
+\paragraph{P1 --- The VM is running and has an address} (Host PowerShell, before SSH and before recording). The preparation block proves both: the inventory listed the VM and \code{\$ip} holds its current address. If the block completed in this window, P1 is satisfied; it is a check, not an instruction to start, restart, or reprovision anything. Repeat it before a new take or after any VM or network change. P1 is a precondition; on-camera step 1 is the README in the browser and runs no command.
 
-If the list is empty, the VM is powered off (for instance after a host restart). Start it headless and wait for the address; Docker's restart policy brings the Compose service back, and the k3d node container restarts the cluster, so the stack returns on its own within a minute or two:
-\begin{cmd}
-& $vmrun -T ws start C:\VMs\cs554-vm\cs554-vm.vmx nogui
-& $vmrun -T ws getGuestIPAddress C:\VMs\cs554-vm\cs554-vm.vmx -wait
-\end{cmd}
-Then continue with P2; P3 and P4 confirm the services are back (Pod names and counters may have changed, which is expected).
-
-\paragraph{P2 --- The checkout is at the current \code{main}} (VM).
+\paragraph{P2 --- The checkout is at the current \code{main}} (Terminal 2).
 \begin{cmd}
 cd ~/CS-554-MidTerm
 git status --porcelain
-git fetch -q origin && git rev-parse --short HEAD origin/main
+git fetch -q origin &&
+    git rev-parse --short HEAD &&
+    git rev-parse --short origin/main
 \end{cmd}
-Expected: \code{git status} prints nothing, and the two hashes are identical. If they differ, \code{git pull --ff-only origin main} and repeat.
+Expected: \code{git status} prints nothing, and the next two lines are the same commit hash. If they differ and the working tree is clean, \code{git pull --ff-only origin main} and repeat P2; never reset the checkout to make them match.
 
-\paragraph{P3 --- The Compose service is healthy} (VM).
+\paragraph{P3 --- The Compose service is healthy} (Terminal 1).
 \begin{cmd}
 docker inspect -f '{{.State.Health.Status}}' compose-web-1
 curl -s localhost:8080/health
 \end{cmd}
 Expected: \code{healthy}, then \code{\{"status":"ok"\}}.
 
-\paragraph{P4 --- The cluster is at its baseline} (VM).
+\paragraph{P4 --- The cluster is at its baseline} (Terminal 2).
 \begin{cmd}
 kubectl get deploy cs554-midterm
 kubectl get pods -l app=cs554-midterm
@@ -128,16 +172,17 @@ done
 \end{cmd}
 Expected: Deployment \code{2/2}; two application Pods \code{1/1 Running} with \code{RESTARTS 0}; \code{client} \code{Running}; selector \code{cs554-midterm} (not \code{cs554-midterm-typo}); ready endpoints \code{2}; both Pods report the readiness file.
 
-\paragraph{P5 --- No forwarder is left over} (VM).
+\paragraph{P5 --- No forwarder is left over} (Terminal 2).
 \begin{cmd}
 pgrep -af 'kubectl.*port[-]forward' || echo "no forwarder"
 ss -ltn '( sport = :18080 )'
 \end{cmd}
 Expected: \code{no forwarder}, and the \code{ss} table contains only its header line.
 
-\paragraph{P6 --- The host reaches the service} (host, with the address from P1).
+\paragraph{P6 --- The host reaches the service} (Host PowerShell, after the preparation block in that window).
 \begin{cmd}
-curl.exe -i http://<address>:8080/health
+$healthUrl = 'http://{0}:8080/health' -f $ip
+curl.exe -i $healthUrl
 \end{cmd}
 Expected: \code{HTTP/1.1 200 OK} with body \code{\{"status":"ok"\}}.
 
@@ -154,16 +199,17 @@ Screen: the README in the browser, scrolled to the repository layout and the env
 \subsection*{Step 2 --- Compose (0:20--1:10)}
 Purpose: show the service running under Compose, reached from inside the VM and from the host, with its per-process counter.
 
-\enter{VM, Terminal 1}
+\enter{Terminal 1}
 \begin{cmd}
 cd ~/CS-554-MidTerm/compose
 docker compose ps
 curl -s localhost:8080/
 curl -s localhost:8080/
 \end{cmd}
-\enter{host, with the address from P1}
+\enter{Host PowerShell, whose preparation block set \code{\$ip}}
 \begin{cmd}
-curl.exe -s http://<address>:8080/
+$serviceUrl = 'http://{0}:8080/' -f $ip
+curl.exe -s $serviceUrl
 \end{cmd}
 \observed
 \begin{out}
@@ -175,12 +221,12 @@ compose-web-1   cs554-midterm:1.1   "docker-entrypoint.s…"   web       Up 20 h
 \end{out}
 The third response came from the host. The service's JSON has no trailing newline, so consecutive responses run together on one line in the terminal; they are separated here for readability, and the \code{ps} output is trimmed to the columns that matter.
 \talk{The Windows host reaches the VM's NAT address directly; no port forwarding is configured. The hostname stays the same and the count rises by one with every request, because this counter belongs to that one application process.}
-\checkpoint{the host's count is exactly one more than the VM's last. If \code{curl.exe} cannot connect, the guest address has changed: confirm it with P1 and repeat the host line.}
+\checkpoint{the host's count is exactly one more than the VM's last. If \code{curl.exe} cannot connect, run the preparation block again in this window to refresh \code{\$ip} and repeat the request.}
 
 \subsection*{Step 3 --- Kubernetes (1:10--2:00)}
 Purpose: show the same image running as two replicas behind a Service, with requests reaching both.
 
-\enter{VM, Terminal 2}
+\enter{Terminal 2}
 \begin{cmd}
 cd ~/CS-554-MidTerm
 kubectl get deploy,pods,svc
@@ -211,7 +257,7 @@ The four responses name two different Pods with independent counters. A short sa
 \subsection*{Step 4 --- Pod replacement (2:00--2:40)}
 Purpose: delete one Pod and show the ReplicaSet restoring the declared count without any further apply.
 
-\enter{VM, Terminal 2; the first block selects a live Pod and watches, the second runs after \code{Ctrl+C}}
+\enter{Terminal 2; the first block selects a live Pod and watches, the second runs after \code{Ctrl+C}}
 \begin{cmd}
 pod_to_delete=$(kubectl get pods -l app=cs554-midterm -o jsonpath='{.items[0].metadata.name}')
 printf 'Selected Pod: %s\n' "$pod_to_delete"
@@ -248,7 +294,7 @@ The replacement carries a new generated name and reached \code{1/1} seven second
 \subsection*{Step 5 --- Troubleshooting finding (2:40--3:40)}
 Purpose: break the Service selector, show healthy Pods with no endpoints, restore it, and show recovery measured by a successful request. The restore block is the README's ``Restore and verify'' block, unchanged.
 
-\enter{VM, Terminal 2; failure group}
+\enter{Terminal 2; failure group}
 \begin{cmd}
 kubectl apply -f k8s/service-broken.yaml
 kubectl get svc cs554-midterm -o jsonpath='{.spec.selector.app}'; echo
@@ -281,7 +327,7 @@ NAME                  ADDRESSTYPE   PORTS     ENDPOINTS   AGE
 cs554-midterm-q55pw   IPv4          <unset>   <unset>     24h
 \end{out}
 
-\enter{VM, Terminal 2; restore group}
+\enter{Terminal 2; restore group}
 \begin{cmd}
 kubectl apply -f k8s/service.yaml
 for attempt in $(seq 1 20); do
